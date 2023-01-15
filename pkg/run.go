@@ -21,6 +21,8 @@ func variableType(variable ast.Expr) string {
 		typeName = fmt.Sprintf("[]%s", variableType(t.Elt))
 	case *ast.Ident:
 		typeName = t.Name
+	case *ast.MapType:
+		typeName = fmt.Sprintf("map[%s]%s", variableType(t.Key), variableType(t.Value))
 	case *ast.SelectorExpr:
 		typeName = fmt.Sprintf("%s.%s", t.X, t.Sel)
 	case *ast.StarExpr:
@@ -28,7 +30,7 @@ func variableType(variable ast.Expr) string {
 	default:
 		log.WithFields(log.Fields{
 			"variable.(type))": fmt.Sprintf("%#v", variable)},
-		).Fatalf("unknown variable type")
+		).Panicf("unknown variable type")
 	}
 	return typeName
 }
@@ -112,6 +114,23 @@ func typeElem(typeObj doc.Type) string {
 	return fmt.Sprintf("type %s%s", typeObj.Name, fields)
 }
 
+func varElem(varObj doc.Value) string {
+	lines := []string{}
+	for _, spec := range varObj.Decl.Specs {
+		varItem := spec.(*ast.ValueSpec)
+		params := []string{}
+		for _, param := range varItem.Names {
+			params = append(params, param.Name)
+		}
+		if varItem.Type != nil {
+			last := len(params) - 1
+			params[last] = params[last] + " " + variableType(varItem.Type)
+		}
+		lines = append(lines, strings.Join(params, ", "))
+	}
+	return strings.Join(lines, "\n")
+}
+
 func filter(info fs.FileInfo) bool {
 	if strings.HasSuffix(info.Name(), "_test.go") {
 		return false
@@ -136,6 +155,7 @@ func Run() error {
 		"trim":     strings.TrimSpace,
 		"funcElem": funcElem,
 		"typeElem": typeElem,
+		"varElem":  varElem,
 	}).Parse(`
 # {{ .Name }}
 
@@ -150,6 +170,31 @@ Imports: {{ len .Imports }}
 {{ funcElem $val }}{{- end }}
 {{ range $val := .Types }}
 {{ typeElem $val }}{{- end }}
+
+### Examples
+{{ if .Examples }}
+{{range $val := .Examples }}
+- {{ $val }}
+{{- end}}
+{{- else }}
+This section is	empty.
+{{- end}}
+
+### Constants
+{{ if .Consts }}
+{{ range $val := .Consts }}
+- {{ $val.Doc }}
+{{- end}}
+{{- else }}
+This section is	empty.
+{{- end}}
+
+### Variables
+{{ if .Vars }}{{ range $val := .Vars }}
+{{ varElem $val }}{{- end}}
+{{- else }}
+This section is	empty.
+{{- end}}
 `)
 	if err != err {
 		log.Error("Error from tmpl.New")
