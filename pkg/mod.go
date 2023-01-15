@@ -11,7 +11,7 @@ import (
 )
 
 func hasGoMod(dir string) bool {
-	log.Info("Checking " + dir)
+	// log.Info("Checking " + dir)
 	_, err := os.Stat(dir + "/go.mod")
 	return !os.IsNotExist(err)
 }
