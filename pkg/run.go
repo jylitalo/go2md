@@ -21,6 +21,34 @@ func variableType(variable ast.Expr, depth int) string {
 		typeName = fmt.Sprintf("[]%s", variableType(t.Elt, depth))
 	case *ast.Ellipsis:
 		typeName = fmt.Sprintf("...%s", variableType(t.Elt, depth))
+	case *ast.FuncType:
+		params := []string{}
+		for _, paramList := range t.Params.List {
+			if len(paramList.Names) > 0 {
+				for _, param := range paramList.Names {
+					params = append(params, param.Name)
+				}
+				if paramList.Type != nil {
+					last := len(params) - 1
+					params[last] = params[last] + " " + variableType(paramList.Type, 0)
+				}
+			} else if paramList.Type != nil {
+				params = []string{variableType(paramList.Type, 0)}
+			}
+		}
+		results := ""
+		if t.Results != nil {
+			if len(t.Results.List) == 1 {
+				results = " " + variableType(t.Results.List[0].Type, 0)
+			} else {
+				r := []string{}
+				for _, param := range t.Results.List {
+					r = append(r, variableType(param.Type, 0))
+				}
+				results = fmt.Sprintf(" (%s)", strings.Join(r, ", "))
+			}
+		}
+		typeName = fmt.Sprintf("func(%s)%s", strings.Join(params, ", "), results)
 	case *ast.Ident:
 		typeName = t.Name
 	case *ast.InterfaceType:
@@ -107,6 +135,9 @@ func typeElem(typeObj doc.Type) string {
 	lines := []string{}
 	for _, spec := range typeObj.Decl.Specs {
 		switch t := spec.(*ast.TypeSpec).Type.(type) {
+		case *ast.FuncType, *ast.Ident:
+			typeDesc := fmt.Sprintf("type %s %s", typeObj.Name, variableType(t, 0))
+			return typeDesc
 		case *ast.InterfaceType:
 			for _, field := range t.Methods.List {
 				lines = append(lines, typeField(field, 0))
@@ -114,6 +145,9 @@ func typeElem(typeObj doc.Type) string {
 		case *ast.StructType:
 			for _, field := range t.Fields.List {
 				lines = append(lines, typeField(field, 0))
+			}
+			for _, funcObj := range typeObj.Methods {
+				lines = append(lines, "    "+funcElem(*funcObj))
 			}
 		default:
 			log.WithFields(log.Fields{
@@ -191,7 +225,7 @@ Imports: {{ len .Imports }}
 - {{ $val }}
 {{- end}}
 {{- else }}
-This section is	empty.
+This section is empty.
 {{- end}}
 
 ### Constants
@@ -200,14 +234,14 @@ This section is	empty.
 - {{ $val.Doc }}
 {{- end}}
 {{- else }}
-This section is	empty.
+This section is empty.
 {{- end}}
 
 ### Variables
 {{ if .Vars }}{{ range $val := .Vars }}
 {{ varElem $val }}{{- end}}
 {{- else }}
-This section is	empty.
+This section is empty.
 {{- end}}
 `)
 	if err != err {
@@ -220,7 +254,7 @@ This section is	empty.
 		if strings.HasSuffix(modName, "/"+pkg.Name) {
 			pkg.Name = modName
 		}
-		if err = tmpl.Execute(os.Stdout, *pkg); err != err {
+		if err = tmpl.Execute(os.Stdout, *pkg); err != nil {
 			log.Error("Error from tmpl.Execute")
 			return err
 		}
