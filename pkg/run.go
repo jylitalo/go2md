@@ -14,50 +14,64 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func variableType(variable ast.Expr) string {
+func variableType(variable ast.Expr, depth int) string {
 	typeName := ""
 	switch t := variable.(type) {
 	case *ast.ArrayType:
-		typeName = fmt.Sprintf("[]%s", variableType(t.Elt))
+		typeName = fmt.Sprintf("[]%s", variableType(t.Elt, depth))
+	case *ast.Ellipsis:
+		typeName = fmt.Sprintf("...%s", variableType(t.Elt, depth))
 	case *ast.Ident:
 		typeName = t.Name
+	case *ast.InterfaceType:
+		typeName = "interface{}"
 	case *ast.MapType:
-		typeName = fmt.Sprintf("map[%s]%s", variableType(t.Key), variableType(t.Value))
+		typeName = fmt.Sprintf("map[%s]%s", variableType(t.Key, depth), variableType(t.Value, depth))
 	case *ast.SelectorExpr:
 		typeName = fmt.Sprintf("%s.%s", t.X, t.Sel)
 	case *ast.StarExpr:
-		typeName = fmt.Sprintf("*%s", variableType(t.X))
+		typeName = fmt.Sprintf("*%s", variableType(t.X, depth))
+	case *ast.StructType:
+		lines := []string{}
+		for _, field := range t.Fields.List {
+			lines = append(lines, typeField(field, depth+1))
+		}
+		typeName = fmt.Sprintf("struct\n%s", strings.Join(lines, "\n"))
 	default:
 		log.WithFields(log.Fields{
-			"variable.(type))": fmt.Sprintf("%#v", variable)},
+			"variable.(type)": fmt.Sprintf("%#v", variable)},
 		).Panicf("unknown variable type")
 	}
 	return typeName
 }
 
-func typeField(field *ast.Field) string {
+func typeField(field *ast.Field, depth int) string {
 	line := ""
+	prefix := "    "
+	for i := 0; i < depth; i++ {
+		prefix = prefix + "    "
+	}
 	switch t := field.Type.(type) {
 	case *ast.FuncType:
 		params := []string{}
 		for _, param := range t.Params.List {
-			params = append(params, variableType(param.Type))
+			params = append(params, variableType(param.Type, depth))
 		}
 		results := ""
 		if t.Results != nil {
 			if len(t.Results.List) == 1 {
-				results = variableType(t.Results.List[0].Type)
+				results = variableType(t.Results.List[0].Type, depth)
 			} else {
 				r := []string{}
 				for _, param := range t.Results.List {
-					r = append(r, variableType(param.Type))
+					r = append(r, variableType(param.Type, depth))
 				}
 				results = fmt.Sprintf("(%s)", strings.Join(r, ", "))
 			}
 		}
-		line = fmt.Sprintf("    func %s(%s) %s", field.Names[0], strings.Join(params, ", "), results)
+		line = fmt.Sprintf("%sfunc %s(%s) %s", prefix, field.Names[0], strings.Join(params, ", "), results)
 	default:
-		line = fmt.Sprintf("    %s %s", field.Names[0], variableType(field.Type))
+		line = fmt.Sprintf("%s%s %s", prefix, field.Names[0], variableType(field.Type, depth))
 	}
 	return line
 }
@@ -69,16 +83,16 @@ func funcElem(funcObj doc.Func) string {
 			params = append(params, param.Name)
 		}
 		last := len(params) - 1
-		params[last] = params[last] + " " + variableType(paramList.Type)
+		params[last] = params[last] + " " + variableType(paramList.Type, 0)
 	}
 	results := ""
 	if funcObj.Decl.Type.Results != nil {
 		if len(funcObj.Decl.Type.Results.List) == 1 {
-			results = " " + variableType(funcObj.Decl.Type.Results.List[0].Type)
+			results = " " + variableType(funcObj.Decl.Type.Results.List[0].Type, 0)
 		} else {
 			r := []string{}
 			for _, param := range funcObj.Decl.Type.Results.List {
-				r = append(r, variableType(param.Type))
+				r = append(r, variableType(param.Type, 0))
 			}
 			results = fmt.Sprintf(" (%s)", strings.Join(r, ", "))
 		}
@@ -95,11 +109,11 @@ func typeElem(typeObj doc.Type) string {
 		switch t := spec.(*ast.TypeSpec).Type.(type) {
 		case *ast.InterfaceType:
 			for _, field := range t.Methods.List {
-				lines = append(lines, typeField(field))
+				lines = append(lines, typeField(field, 0))
 			}
 		case *ast.StructType:
 			for _, field := range t.Fields.List {
-				lines = append(lines, typeField(field))
+				lines = append(lines, typeField(field, 0))
 			}
 		default:
 			log.WithFields(log.Fields{
@@ -124,7 +138,7 @@ func varElem(varObj doc.Value) string {
 		}
 		if varItem.Type != nil {
 			last := len(params) - 1
-			params[last] = params[last] + " " + variableType(varItem.Type)
+			params[last] = params[last] + " " + variableType(varItem.Type, 0)
 		}
 		lines = append(lines, strings.Join(params, ", "))
 	}
