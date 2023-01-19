@@ -174,7 +174,7 @@ func varElem(varObj doc.Value) string {
 			last := len(params) - 1
 			params[last] = params[last] + " " + variableType(varItem.Type, 0)
 		}
-		lines = append(lines, strings.Join(params, ", "))
+		lines = append(lines, "- "+strings.Join(params, ", "))
 	}
 	return strings.Join(lines, "\n")
 }
