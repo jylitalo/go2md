@@ -105,6 +105,11 @@ func typeField(field *ast.Field, depth int) string {
 }
 
 func funcElem(funcObj doc.Func) string {
+	receiver := ""
+	if funcObj.Recv != "" {
+		recv := funcObj.Decl.Recv.List[0]
+		receiver = fmt.Sprintf("(%s %s) ", recv.Names[0], funcObj.Recv)
+	}
 	params := []string{}
 	for _, paramList := range funcObj.Decl.Type.Params.List {
 		for _, param := range paramList.Names {
@@ -125,7 +130,7 @@ func funcElem(funcObj doc.Func) string {
 			results = fmt.Sprintf(" (%s)", strings.Join(r, ", "))
 		}
 	}
-	return fmt.Sprintf("- func %s(%s)%s", funcObj.Name, strings.Join(params, ", "), results)
+	return fmt.Sprintf("- func %s%s(%s)%s", receiver, funcObj.Name, strings.Join(params, ", "), results)
 }
 
 func typeElem(typeObj doc.Type) string {
@@ -145,6 +150,9 @@ func typeElem(typeObj doc.Type) string {
 		case *ast.StructType:
 			for _, field := range t.Fields.List {
 				lines = append(lines, typeField(field, 0))
+			}
+			for _, funcObj := range typeObj.Funcs {
+				lines = append(lines, "    "+funcElem(*funcObj))
 			}
 			for _, funcObj := range typeObj.Methods {
 				lines = append(lines, "    "+funcElem(*funcObj))
