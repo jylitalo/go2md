@@ -88,18 +88,18 @@ func typeField(field *ast.Field, depth int) string {
 		results := ""
 		if t.Results != nil {
 			if len(t.Results.List) == 1 {
-				results = variableType(t.Results.List[0].Type, depth)
+				results = " " + variableType(t.Results.List[0].Type, depth)
 			} else {
 				r := []string{}
 				for _, param := range t.Results.List {
 					r = append(r, variableType(param.Type, depth))
 				}
-				results = fmt.Sprintf("(%s)", strings.Join(r, ", "))
+				results = fmt.Sprintf(" (%s)", strings.Join(r, ", "))
 			}
 		}
-		line = fmt.Sprintf("%sfunc %s(%s) %s", prefix, field.Names[0], strings.Join(params, ", "), results)
+		line = fmt.Sprintf("%s- func %s(%s)%s", prefix, field.Names[0], strings.Join(params, ", "), results)
 	default:
-		line = fmt.Sprintf("%s%s %s", prefix, field.Names[0], variableType(field.Type, depth))
+		line = fmt.Sprintf("%s- %s %s", prefix, field.Names[0], variableType(field.Type, depth))
 	}
 	return line
 }
@@ -125,7 +125,7 @@ func funcElem(funcObj doc.Func) string {
 			results = fmt.Sprintf(" (%s)", strings.Join(r, ", "))
 		}
 	}
-	return fmt.Sprintf("func %s(%s)%s", funcObj.Name, strings.Join(params, ", "), results)
+	return fmt.Sprintf("- func %s(%s)%s", funcObj.Name, strings.Join(params, ", "), results)
 }
 
 func typeElem(typeObj doc.Type) string {
@@ -136,7 +136,7 @@ func typeElem(typeObj doc.Type) string {
 	for _, spec := range typeObj.Decl.Specs {
 		switch t := spec.(*ast.TypeSpec).Type.(type) {
 		case *ast.FuncType, *ast.Ident:
-			typeDesc := fmt.Sprintf("type %s %s", typeObj.Name, variableType(t, 0))
+			typeDesc := fmt.Sprintf("- type %s %s", typeObj.Name, variableType(t, 0))
 			return typeDesc
 		case *ast.InterfaceType:
 			for _, field := range t.Methods.List {
@@ -159,7 +159,7 @@ func typeElem(typeObj doc.Type) string {
 	if len(lines) > 0 {
 		fields = "\n" + strings.Join(lines, "\n")
 	}
-	return fmt.Sprintf("type %s%s", typeObj.Name, fields)
+	return fmt.Sprintf("- type %s%s", typeObj.Name, fields)
 }
 
 func varElem(varObj doc.Value) string {
