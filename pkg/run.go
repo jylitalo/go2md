@@ -133,6 +133,40 @@ func funcElem(funcObj doc.Func) string {
 	return fmt.Sprintf("- func %s%s(%s)%s", receiver, funcObj.Name, strings.Join(params, ", "), results)
 }
 
+func funcSection(funcObj doc.Func) string {
+	receiver := ""
+	if funcObj.Recv != "" {
+		recv := funcObj.Decl.Recv.List[0]
+		receiver = fmt.Sprintf("(%s %s) ", recv.Names[0], funcObj.Recv)
+	}
+	params := []string{}
+	for _, paramList := range funcObj.Decl.Type.Params.List {
+		for _, param := range paramList.Names {
+			params = append(params, param.Name)
+		}
+		last := len(params) - 1
+		params[last] = params[last] + " " + variableType(paramList.Type, 0)
+	}
+	results := ""
+	if funcObj.Decl.Type.Results != nil {
+		if len(funcObj.Decl.Type.Results.List) == 1 {
+			results = " " + variableType(funcObj.Decl.Type.Results.List[0].Type, 0)
+		} else {
+			r := []string{}
+			for _, param := range funcObj.Decl.Type.Results.List {
+				r = append(r, variableType(param.Type, 0))
+			}
+			results = fmt.Sprintf(" (%s)", strings.Join(r, ", "))
+		}
+	}
+	docMd := ""
+	if funcObj.Doc != "" {
+		docMd = "\n\n" + funcObj.Doc
+	}
+	return fmt.Sprintf(
+		"### func %s%s(%s)%s%s", receiver, funcObj.Name, strings.Join(params, ", "), results, docMd)
+}
+
 func typeElem(typeObj doc.Type) string {
 	if len(typeObj.Decl.Specs) == 0 {
 		return ""
@@ -168,6 +202,61 @@ func typeElem(typeObj doc.Type) string {
 		fields = "\n" + strings.Join(lines, "\n")
 	}
 	return fmt.Sprintf("- type %s%s", typeObj.Name, fields)
+}
+
+func typeSection(typeObj doc.Type) string {
+	if len(typeObj.Decl.Specs) == 0 {
+		return ""
+	}
+	lines := []string{}
+	docMd := ""
+	typeName := ""
+	for _, spec := range typeObj.Decl.Specs {
+		docMd = ""
+		switch t := spec.(*ast.TypeSpec).Type.(type) {
+		case *ast.FuncType, *ast.Ident:
+			typeDesc := fmt.Sprintf("### type %s %s%s", typeObj.Name, variableType(t, 0), docMd)
+			return typeDesc
+		case *ast.InterfaceType:
+			typeName = "interface"
+		case *ast.StructType:
+			typeName = "struct"
+			if len(t.Fields.List) > 0 {
+				lines = append(lines, "")
+			}
+			for _, field := range t.Fields.List {
+				line := strings.TrimSpace(typeField(field, 0))
+				if field.Tag != nil {
+					line = line + " " + field.Tag.Value
+				}
+				lines = append(lines, line)
+			}
+			if len(t.Fields.List) > 0 {
+				lines = append(lines, "")
+			}
+			for _, funcObj := range typeObj.Funcs {
+				lines = append(lines, funcSection(*funcObj))
+			}
+			if len(typeObj.Methods) > 0 {
+				lines = append(lines, "")
+			}
+			for _, funcObj := range typeObj.Methods {
+				lines = append(lines, funcSection(*funcObj))
+			}
+		default:
+			log.WithFields(log.Fields{
+				"spec.(*ast.TypeSpec).Type": fmt.Sprintf("%#v", spec.(*ast.TypeSpec).Type)},
+			).Fatalf("unknown parameter type %#v", t)
+		}
+	}
+	fields := ""
+	if len(lines) > 0 {
+		fields = "\n" + strings.Join(lines, "\n")
+	}
+	if typeObj.Doc != "" {
+		docMd = "\n\n" + strings.TrimSpace(typeObj.Doc)
+	}
+	return fmt.Sprintf("### type %s %s%s%s\n", typeObj.Name, typeName, docMd, fields)
 }
 
 func varElem(varObj doc.Value) string {
@@ -208,10 +297,12 @@ func Run() error {
 		return err
 	}
 	tmpl, err := template.New("new").Funcs(template.FuncMap{
-		"trim":     strings.TrimSpace,
-		"funcElem": funcElem,
-		"typeElem": typeElem,
-		"varElem":  varElem,
+		"trim":        strings.TrimSpace,
+		"funcElem":    funcElem,
+		"funcSection": funcSection,
+		"typeElem":    typeElem,
+		"typeSection": typeSection,
+		"varElem":     varElem,
 	}).Parse(`
 # {{ .Name }}
 
@@ -227,7 +318,7 @@ Imports: {{ len .Imports }}
 {{ range $val := .Types }}
 {{ typeElem $val }}{{- end }}
 
-### Examples
+## Examples
 {{ if .Examples }}
 {{range $val := .Examples }}
 - {{ $val }}
@@ -236,7 +327,7 @@ Imports: {{ len .Imports }}
 This section is empty.
 {{- end}}
 
-### Constants
+## Constants
 {{ if .Consts }}
 {{ range $val := .Consts }}
 - {{ $val.Doc }}
@@ -245,12 +336,21 @@ This section is empty.
 This section is empty.
 {{- end}}
 
-### Variables
+## Variables
 {{ if .Vars }}{{ range $val := .Vars }}
 {{ varElem $val }}{{- end}}
 {{- else }}
 This section is empty.
 {{- end}}
+
+{{ if .Funcs }}## Functions
+{{ range $val := .Funcs }}
+{{ funcSection $val }}{{- end }}
+{{- end }}
+{{ if .Types }}## Types
+{{ range $val := .Types }}
+{{ typeSection $val }}{{- end }}
+{{- end }}
 `)
 	if err != err {
 		log.Error("Error from tmpl.New")
