@@ -1,6 +1,7 @@
 package pkg
 
 import (
+	_ "embed"
 	"fmt"
 	"go/ast"
 	"go/doc"
@@ -14,6 +15,12 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+//go:embed template.md
+var Markdown string
+
+func code(text string) string {
+	return "```golang\n" + text + "\n```\n"
+}
 func variableType(variable ast.Expr, depth int) string {
 	typeName := ""
 	switch t := variable.(type) {
@@ -62,7 +69,7 @@ func variableType(variable ast.Expr, depth int) string {
 	case *ast.StructType:
 		lines := []string{}
 		for _, field := range t.Fields.List {
-			lines = append(lines, typeField(field, depth+1))
+			lines = append(lines, typeField(field, depth+1, true))
 		}
 		typeName = fmt.Sprintf("struct\n%s", strings.Join(lines, "\n"))
 	default:
@@ -73,11 +80,14 @@ func variableType(variable ast.Expr, depth int) string {
 	return typeName
 }
 
-func typeField(field *ast.Field, depth int) string {
+func typeField(field *ast.Field, depth int, hyphen bool) string {
 	line := ""
 	prefix := "    "
 	for i := 0; i < depth; i++ {
 		prefix = prefix + "    "
+	}
+	if hyphen {
+		prefix = prefix + "- "
 	}
 	switch t := field.Type.(type) {
 	case *ast.FuncType:
@@ -97,19 +107,23 @@ func typeField(field *ast.Field, depth int) string {
 				results = fmt.Sprintf(" (%s)", strings.Join(r, ", "))
 			}
 		}
-		line = fmt.Sprintf("%s- func %s(%s)%s", prefix, field.Names[0], strings.Join(params, ", "), results)
+		line = fmt.Sprintf("%sfunc %s(%s)%s", prefix, field.Names[0], strings.Join(params, ", "), results)
 	default:
-		line = fmt.Sprintf("%s- %s %s", prefix, field.Names[0], variableType(field.Type, depth))
+		line = fmt.Sprintf("%s%s %s", prefix, field.Names[0], variableType(field.Type, depth))
 	}
 	return line
 }
 
-func funcElem(funcObj doc.Func) string {
+func funcReceiver(funcObj doc.Func) string {
 	receiver := ""
 	if funcObj.Recv != "" {
 		recv := funcObj.Decl.Recv.List[0]
 		receiver = fmt.Sprintf("(%s %s) ", recv.Names[0], funcObj.Recv)
 	}
+	return receiver
+}
+
+func funcParams(funcObj doc.Func) []string {
 	params := []string{}
 	for _, paramList := range funcObj.Decl.Type.Params.List {
 		for _, param := range paramList.Names {
@@ -118,53 +132,40 @@ func funcElem(funcObj doc.Func) string {
 		last := len(params) - 1
 		params[last] = params[last] + " " + variableType(paramList.Type, 0)
 	}
-	results := ""
-	if funcObj.Decl.Type.Results != nil {
-		if len(funcObj.Decl.Type.Results.List) == 1 {
-			results = " " + variableType(funcObj.Decl.Type.Results.List[0].Type, 0)
-		} else {
-			r := []string{}
-			for _, param := range funcObj.Decl.Type.Results.List {
-				r = append(r, variableType(param.Type, 0))
-			}
-			results = fmt.Sprintf(" (%s)", strings.Join(r, ", "))
+	return params
+}
+
+func funcReturns(funcObj doc.Func) string {
+	switch {
+	case funcObj.Decl.Type.Results == nil:
+		return ""
+	case len(funcObj.Decl.Type.Results.List) == 1:
+		return " " + variableType(funcObj.Decl.Type.Results.List[0].Type, 0)
+	default:
+		r := []string{}
+		for _, param := range funcObj.Decl.Type.Results.List {
+			r = append(r, variableType(param.Type, 0))
 		}
+		return fmt.Sprintf(" (%s)", strings.Join(r, ", "))
 	}
-	return fmt.Sprintf("- func %s%s(%s)%s", receiver, funcObj.Name, strings.Join(params, ", "), results)
+}
+
+func funcHeading(funcObj doc.Func) string {
+	return fmt.Sprintf("func %s%s", funcReceiver(funcObj), funcObj.Name)
+}
+
+func funcElem(funcObj doc.Func) string {
+	return fmt.Sprintf(
+		"- func %s%s(%s)%s", funcReceiver(funcObj), funcObj.Name,
+		strings.Join(funcParams(funcObj), ", "), funcReturns(funcObj),
+	)
 }
 
 func funcSection(funcObj doc.Func) string {
-	receiver := ""
-	if funcObj.Recv != "" {
-		recv := funcObj.Decl.Recv.List[0]
-		receiver = fmt.Sprintf("(%s %s) ", recv.Names[0], funcObj.Recv)
-	}
-	params := []string{}
-	for _, paramList := range funcObj.Decl.Type.Params.List {
-		for _, param := range paramList.Names {
-			params = append(params, param.Name)
-		}
-		last := len(params) - 1
-		params[last] = params[last] + " " + variableType(paramList.Type, 0)
-	}
-	results := ""
-	if funcObj.Decl.Type.Results != nil {
-		if len(funcObj.Decl.Type.Results.List) == 1 {
-			results = " " + variableType(funcObj.Decl.Type.Results.List[0].Type, 0)
-		} else {
-			r := []string{}
-			for _, param := range funcObj.Decl.Type.Results.List {
-				r = append(r, variableType(param.Type, 0))
-			}
-			results = fmt.Sprintf(" (%s)", strings.Join(r, ", "))
-		}
-	}
-	docMd := ""
-	if funcObj.Doc != "" {
-		docMd = "\n\n" + funcObj.Doc
-	}
-	return fmt.Sprintf(
-		"### func %s%s(%s)%s%s", receiver, funcObj.Name, strings.Join(params, ", "), results, docMd)
+	return code(fmt.Sprintf(
+		"func %s%s(%s)%s", funcReceiver(funcObj), funcObj.Name,
+		strings.Join(funcParams(funcObj), ", "), funcReturns(funcObj)),
+	)
 }
 
 func typeElem(typeObj doc.Type) string {
@@ -174,17 +175,10 @@ func typeElem(typeObj doc.Type) string {
 	lines := []string{}
 	for _, spec := range typeObj.Decl.Specs {
 		switch t := spec.(*ast.TypeSpec).Type.(type) {
-		case *ast.FuncType, *ast.Ident:
-			typeDesc := fmt.Sprintf("- type %s %s", typeObj.Name, variableType(t, 0))
+		case *ast.FuncType, *ast.Ident, *ast.InterfaceType:
+			typeDesc := fmt.Sprintf("- type %s", typeObj.Name)
 			return typeDesc
-		case *ast.InterfaceType:
-			for _, field := range t.Methods.List {
-				lines = append(lines, typeField(field, 0))
-			}
 		case *ast.StructType:
-			for _, field := range t.Fields.List {
-				lines = append(lines, typeField(field, 0))
-			}
 			for _, funcObj := range typeObj.Funcs {
 				lines = append(lines, "    "+funcElem(*funcObj))
 			}
@@ -209,23 +203,21 @@ func typeSection(typeObj doc.Type) string {
 		return ""
 	}
 	lines := []string{}
-	docMd := ""
 	typeName := ""
 	for _, spec := range typeObj.Decl.Specs {
-		docMd = ""
 		switch t := spec.(*ast.TypeSpec).Type.(type) {
 		case *ast.FuncType, *ast.Ident:
-			typeDesc := fmt.Sprintf("### type %s %s%s", typeObj.Name, variableType(t, 0), docMd)
+			typeDesc := code(fmt.Sprintf("type %s %s", typeObj.Name, variableType(t, 0)))
 			return typeDesc
 		case *ast.InterfaceType:
 			typeName = "interface"
+			for _, field := range t.Methods.List {
+				lines = append(lines, typeField(field, 0, false))
+			}
 		case *ast.StructType:
 			typeName = "struct"
-			if len(t.Fields.List) > 0 {
-				lines = append(lines, "")
-			}
 			for _, field := range t.Fields.List {
-				line := strings.TrimSpace(typeField(field, 0))
+				line := typeField(field, 0, false)
 				if field.Tag != nil {
 					line = line + " " + field.Tag.Value
 				}
@@ -233,15 +225,6 @@ func typeSection(typeObj doc.Type) string {
 			}
 			if len(t.Fields.List) > 0 {
 				lines = append(lines, "")
-			}
-			for _, funcObj := range typeObj.Funcs {
-				lines = append(lines, funcSection(*funcObj))
-			}
-			if len(typeObj.Methods) > 0 {
-				lines = append(lines, "")
-			}
-			for _, funcObj := range typeObj.Methods {
-				lines = append(lines, funcSection(*funcObj))
 			}
 		default:
 			log.WithFields(log.Fields{
@@ -253,10 +236,7 @@ func typeSection(typeObj doc.Type) string {
 	if len(lines) > 0 {
 		fields = "\n" + strings.Join(lines, "\n")
 	}
-	if typeObj.Doc != "" {
-		docMd = "\n\n" + strings.TrimSpace(typeObj.Doc)
-	}
-	return fmt.Sprintf("### type %s %s%s%s\n", typeObj.Name, typeName, docMd, fields)
+	return "\n" + code(fmt.Sprintf("type %s %s {%s}", typeObj.Name, typeName, fields))
 }
 
 func varElem(varObj doc.Value) string {
@@ -299,59 +279,12 @@ func Run() error {
 	tmpl, err := template.New("new").Funcs(template.FuncMap{
 		"trim":        strings.TrimSpace,
 		"funcElem":    funcElem,
+		"funcHeading": funcHeading,
 		"funcSection": funcSection,
 		"typeElem":    typeElem,
 		"typeSection": typeSection,
 		"varElem":     varElem,
-	}).Parse(`
-# {{ .Name }}
-
-## <a name="pkg-doc">Overview</a>
-
-{{ trim .Doc}}
-
-Imports: {{ len .Imports }}
-
-## Index
-{{ range $val := .Funcs }}
-{{ funcElem $val }}{{- end }}
-{{ range $val := .Types }}
-{{ typeElem $val }}{{- end }}
-
-## Examples
-{{ if .Examples }}
-{{range $val := .Examples }}
-- {{ $val }}
-{{- end}}
-{{- else }}
-This section is empty.
-{{- end}}
-
-## Constants
-{{ if .Consts }}
-{{ range $val := .Consts }}
-- {{ $val.Doc }}
-{{- end}}
-{{- else }}
-This section is empty.
-{{- end}}
-
-## Variables
-{{ if .Vars }}{{ range $val := .Vars }}
-{{ varElem $val }}{{- end}}
-{{- else }}
-This section is empty.
-{{- end}}
-
-{{ if .Funcs }}## Functions
-{{ range $val := .Funcs }}
-{{ funcSection $val }}{{- end }}
-{{- end }}
-{{ if .Types }}## Types
-{{ range $val := .Types }}
-{{ typeSection $val }}{{- end }}
-{{- end }}
-`)
+	}).Parse(Markdown)
 	if err != err {
 		log.Error("Error from tmpl.New")
 		return err
@@ -359,10 +292,11 @@ This section is empty.
 	for _, astPkg := range astPackages {
 		pkg := doc.New(astPkg, ".", 0)
 		// log.WithFields(log.Fields{"pkg": fmt.Sprintf("%#v", pkg)}).Info("output from doc.New")
+		// log.WithFields(log.Fields{"pkg.Types": fmt.Sprintf("%#v: %#v", fset.Position(token.Pos(pkg.Types[0].Decl.Tok)), pkg.Types[0])}).Info("output from doc.New")
 		if strings.HasSuffix(modName, "/"+pkg.Name) {
 			pkg.Name = modName
 		}
-		if err = tmpl.Execute(os.Stdout, *pkg); err != nil {
+		if err = tmpl.Execute(os.Stdout, pkg); err != nil {
 			log.Error("Error from tmpl.Execute")
 			return err
 		}
