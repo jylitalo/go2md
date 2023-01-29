@@ -12,10 +12,10 @@ func NewCommand(version string) *cobra.Command {
 	cmd := &cobra.Command{
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if flag, _ := cmd.Flags().GetBool("version"); flag {
-				fmt.Println("go2md", version)
+				fmt.Println("go2md ", version)
 				return nil
 			}
-			return pkg.Run()
+			return pkg.Run(version)
 		},
 	}
 	cmd.Flags().BoolP("version", "v", false, "print go2md version")
