@@ -6,16 +6,18 @@ import (
 	"go/doc"
 	"go/parser"
 	"go/token"
+	"io"
 	"io/fs"
-	"os"
 	"strings"
 	"text/template"
 
 	log "github.com/sirupsen/logrus"
 )
 
+// Markdown is golang template for go2md output
+//
 //go:embed template.md
-var Markdown string
+var Markdown string // value from template.md file
 
 func filter(info fs.FileInfo) bool {
 	if strings.HasSuffix(info.Name(), "_test.go") {
@@ -27,7 +29,8 @@ func filter(info fs.FileInfo) bool {
 	return false
 }
 
-func Run(version string) error {
+// Run reads all "*.go" files (excluding "*_test.go") and writes markdown document out of it.
+func Run(out io.Writer, version string) error {
 	fset := token.NewFileSet()
 	modName, err := getPackageName(".")
 	if err != nil {
@@ -49,7 +52,7 @@ func Run(version string) error {
 		if strings.HasSuffix(modName, "/"+pkg.Name) {
 			pkg.Name = modName
 		}
-		if err = tmpl.Execute(os.Stdout, pkg); err != nil {
+		if err = tmpl.Execute(out, pkg); err != nil {
 			log.Error("Error from tmpl.Execute")
 			return err
 		}

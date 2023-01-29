@@ -7,6 +7,10 @@
 Imports: {{ len .Imports }}
 
 ## Index
+{{- if .Consts }}
+- Constant{{- end }}
+{{- if .Vars }}
+- Variables{{- end }}
 {{- range $val := .Funcs }}
 {{ funcElem $val }}
 {{- end }}
@@ -15,7 +19,7 @@ Imports: {{ len .Imports }}
 {{- end }}
 
 ## Examples
-{{- if .Examples }}
+{{ if .Examples }}
 {{-   range $val := .Examples }}
 - {{ $val }}
 {{-   end}}
@@ -24,37 +28,52 @@ This section is empty.
 {{- end}}
 
 ## Constants
-{{- if .Consts }}
-{{-   range $val := .Consts }}
-- {{ $val.Doc }}
+{{  if .Consts }}
+{{    range $val := .Consts }}```golang
+{{ varElem $val "const" }}
+```
+{{-     if $val.Doc }}
+{{ $val.Doc }}
+{{-     end }}
 {{-   end }}
 {{- else }}
 This section is empty.
 {{- end }}
 
 ## Variables
-{{- if .Vars }}
-{{-   range $val := .Vars }}
-{{-     varElem $val }}
-{{- end }}
+{{  if .Vars }}
+{{    range $val := .Vars }}```golang
+{{ varElem $val "var" }}
+```
+{{-     if $val.Doc }}
+{{ $val.Doc }}
+{{-     end }}
+{{-   end }}
 {{- else }}
 This section is empty.
+{{- end }}
+{{- if .Funcs }}
 
-{{ end }}
-
-{{-   if .Funcs }}## Functions
-{{-     range $val := .Funcs }}
+## Functions
+{{    range $val := .Funcs }}
 ### {{ funcHeading $val }}
 
-{{       funcSection $val }}{{ if $val.Doc }}{{ $val.Doc }}
+```golang
+{{       funcSection $val }}
+```
+{{      if $val.Doc }}{{ $val.Doc }}
 {{      end }}
 {{-   end }}
 {{- end }}
-{{- if .Types }}## Types
+{{- if .Types }}
+## Types
 {{-   range $val := .Types }}
 ### type {{ $val.Name }}
+
+```golang
 {{      typeSection $val }}
-{{-     if $val.Doc }}{{ $val.Doc }}
+```
+{{      if $val.Doc }}{{ $val.Doc }}
 {{-     end }}
 {{-     if $val.Funcs }}
 {{-       range $valFunc := $val.Funcs }}

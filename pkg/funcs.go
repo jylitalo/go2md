@@ -168,9 +168,9 @@ func funcElem(funcObj doc.Func) string {
 }
 
 func funcSection(funcObj doc.Func) string {
-	return code(fmt.Sprintf(
+	return fmt.Sprintf(
 		"func %s%s(%s)%s", funcReceiver(funcObj), funcObj.Name,
-		strings.Join(funcParams(funcObj), ", "), funcReturns(funcObj)),
+		strings.Join(funcParams(funcObj), ", "), funcReturns(funcObj),
 	)
 }
 
@@ -242,22 +242,42 @@ func typeSection(typeObj doc.Type) string {
 	if len(lines) > 0 {
 		fields = "\n" + strings.Join(lines, "\n")
 	}
-	return "\n" + code(fmt.Sprintf("type %s %s {%s}", typeObj.Name, typeName, fields))
+	return fmt.Sprintf("type %s %s {%s}", typeObj.Name, typeName, fields)
 }
 
-func varElem(varObj doc.Value) string {
+func varElem(varObj doc.Value, varType string) string {
 	lines := []string{}
 	for _, spec := range varObj.Decl.Specs {
 		varItem := spec.(*ast.ValueSpec)
-		params := []string{}
-		for _, param := range varItem.Names {
-			params = append(params, param.Name)
-		}
+		paramType := ""
 		if varItem.Type != nil {
-			last := len(params) - 1
-			params[last] = params[last] + " " + variableType(varItem.Type, 0)
+			paramType = " " + variableType(varItem.Type, 0)
 		}
-		lines = append(lines, "- "+strings.Join(params, ", "))
+		paramName := ""
+		if len(varItem.Names) > 0 {
+			paramName = " " + varItem.Names[0].Name
+		}
+		paramValue := ""
+		switch len(varItem.Values) {
+		case 0:
+		case 1:
+			paramValue = fmt.Sprintf(" %#v", varItem.Values[0])
+		default:
+			values := []string{}
+			for _, value := range varItem.Values {
+				values = append(values, fmt.Sprintf("%#v", value))
+			}
+			paramValue = fmt.Sprintf(" {\n%s\n}", strings.Join(values, ", "))
+		}
+		paramComment := ""
+		if varItem.Comment != nil {
+			comments := []string{}
+			for _, comment := range varItem.Comment.List {
+				comments = append(comments, comment.Text)
+			}
+			paramComment = " " + strings.Join(comments, "\n")
+		}
+		lines = append(lines, fmt.Sprintf("%s %s%s%s%s", varType, paramName, paramType, paramValue, paramComment))
 	}
 	return strings.Join(lines, "\n")
 }

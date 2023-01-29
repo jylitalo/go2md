@@ -9,7 +9,7 @@ import (
 )
 
 //go:embed version.txt
-var Version string
+var Version string // value from version.txt file
 
 func main() {
 	if err := cmd.NewCommand(Version).Execute(); err != nil {
