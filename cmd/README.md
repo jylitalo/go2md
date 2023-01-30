@@ -16,7 +16,6 @@ This section is empty.
 This section is empty.
 
 ## Variables
-
 This section is empty.
 
 ## Functions

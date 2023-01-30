@@ -2,6 +2,7 @@ package main
 
 import (
 	_ "embed"
+	"os"
 
 	"github.com/jylitalo/go2md/cmd"
 
@@ -12,7 +13,7 @@ import (
 var Version string // value from version.txt file
 
 func main() {
-	if err := cmd.NewCommand(Version).Execute(); err != nil {
+	if err := cmd.NewCommand(os.Stdout, Version).Execute(); err != nil {
 		log.Fatal(err)
 	}
 }
