@@ -19,7 +19,7 @@ This section is empty.
 ## Variables
 
 ```golang
-var  Markdown string // value from template.md file
+var Markdown string // value from template.md file
 ```
 Markdown is golang template for go2md output
 
