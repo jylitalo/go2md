@@ -195,11 +195,17 @@ func funcHeading(funcObj doc.Func) string {
 }
 
 func funcElem(funcObj doc.Func) string {
-	return fmt.Sprintf(
-		"- func %s%s(%s)%s", funcReceiver(funcObj), funcObj.Name,
+	text := fmt.Sprintf(
+		"func %s%s(%s)%s", funcReceiver(funcObj), funcObj.Name,
 		strings.Join(funcParams(funcObj.Decl.Type.Params), ", "),
 		funcReturns(funcObj.Decl.Type.Results),
 	)
+	link := strings.ToLower(fmt.Sprintf("func %s%s", funcReceiver(funcObj), funcObj.Name))
+	link = strings.ReplaceAll(link, " ", "-")
+	link = strings.ReplaceAll(link, "*", "")
+	link = strings.ReplaceAll(link, "(", "")
+	link = strings.ReplaceAll(link, ")", "")
+	return fmt.Sprintf("- [%s](#%s)", text, link)
 }
 
 func funcSection(funcObj doc.Func) string {
@@ -217,15 +223,17 @@ func typeElem(typeObj doc.Type) string {
 	lines := []string{}
 	for _, spec := range typeObj.Decl.Specs {
 		switch t := spec.(*ast.TypeSpec).Type.(type) {
-		case *ast.FuncType, *ast.Ident, *ast.InterfaceType:
+		case *ast.FuncType, *ast.Ident:
 			typeDesc := fmt.Sprintf("- type %s", typeObj.Name)
 			return typeDesc
+		case *ast.InterfaceType:
+			link := fmt.Sprintf("type-%s", strings.ToLower(typeObj.Name))
+			typeDesc := fmt.Sprintf("- [type %s](#%s)", typeObj.Name, link)
+			return typeDesc
 		case *ast.StructType:
-			for _, funcObj := range typeObj.Funcs {
-				lines = append(lines, "    "+funcElem(*funcObj))
-			}
-			for _, funcObj := range typeObj.Methods {
-				lines = append(lines, "    "+funcElem(*funcObj))
+			funcs := append(typeObj.Funcs, typeObj.Methods...)
+			for _, funcObj := range funcs {
+				lines = append(lines, "    [%s](#func-%s)", funcElem(*funcObj), strings.ToLower(funcObj.Name))
 			}
 		default:
 			log.WithFields(log.Fields{

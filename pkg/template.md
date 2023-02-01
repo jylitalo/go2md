@@ -8,9 +8,9 @@ Imports: {{ len .Imports }}
 
 ## Index
 {{- if .Consts }}
-- Constant{{- end }}
+- [Constants](#constants){{- end }}
 {{- if .Vars }}
-- Variables{{- end }}
+- [Variables](variables){{- end }}
 {{- range $val := .Funcs }}
 {{ funcElem $val }}
 {{- end }}
