@@ -233,7 +233,7 @@ func typeElem(typeObj doc.Type) string {
 		case *ast.StructType:
 			funcs := append(typeObj.Funcs, typeObj.Methods...)
 			for _, funcObj := range funcs {
-				lines = append(lines, "    [%s](#func-%s)", funcElem(*funcObj), strings.ToLower(funcObj.Name))
+				lines = append(lines, "    "+funcElem(*funcObj))
 			}
 		default:
 			log.WithFields(log.Fields{
@@ -245,7 +245,7 @@ func typeElem(typeObj doc.Type) string {
 	if len(lines) > 0 {
 		fields = "\n" + strings.Join(lines, "\n")
 	}
-	return fmt.Sprintf("- type %s%s", typeObj.Name, fields)
+	return fmt.Sprintf("- [type %s](#type-%s)%s", typeObj.Name, strings.ToLower(typeObj.Name), fields)
 }
 
 func typeSection(typeObj doc.Type) string {
