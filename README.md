@@ -5,3 +5,6 @@ This project was inspired by [github.com/davecheney/godoc2md](https://github.com
 
 Main target audience is private golang projects or anyone, who wants to keep documentation in git repo as files.
 
+## Install
+
+`go build go2md.go` will produce you go2md binary.
