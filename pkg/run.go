@@ -3,6 +3,7 @@ package pkg
 import (
 	_ "embed"
 	"fmt"
+	"go/ast"
 	"go/doc"
 	"go/parser"
 	"go/token"
@@ -29,6 +30,35 @@ func filter(info fs.FileInfo) bool {
 	return false
 }
 
+func buildImportMap(specs []*ast.ImportSpec) map[string]string {
+	mapping := map[string]string{}
+	for _, spec := range specs {
+		path := strings.Trim(spec.Path.Value, ("\""))
+		switch {
+		case spec.Name == nil:
+			fields := strings.Split(path, "/")
+			mapping[fields[len(fields)-1]] = path
+		case spec.Name.Name == "_":
+			continue
+		default:
+			mapping[spec.Name.Name] = path
+		}
+	}
+	return mapping
+}
+
+func dirImports(astPackages map[string]*ast.Package) map[string]string {
+	mapping := map[string]string{}
+	for _, astPkg := range astPackages {
+		for _, f := range astPkg.Files {
+			for k, v := range buildImportMap(f.Imports) {
+				mapping[k] = v
+			}
+		}
+	}
+	return mapping
+}
+
 // Run reads all "*.go" files (excluding "*_test.go") and writes markdown document out of it.
 func Run(out io.Writer, version string) error {
 	fset := token.NewFileSet()
@@ -40,7 +70,9 @@ func Run(out io.Writer, version string) error {
 	if err != err {
 		return err
 	}
-	tmpl, err := template.New("new").Funcs(templateFuncs(version)).Parse(Markdown)
+	imports := dirImports(astPackages)
+	imports["main"] = modName
+	tmpl, err := template.New("new").Funcs(templateFuncs(version, imports)).Parse(Markdown)
 	if err != nil {
 		log.Error("Error from tmpl.New")
 		return err
