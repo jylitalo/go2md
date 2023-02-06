@@ -18,9 +18,9 @@ This section is empty.
 
 ## Variables
 
-```golang
+<pre>
 var Markdown string // value from template.md file
-```
+</pre>
 Markdown is golang template for go2md output
 
 
@@ -28,9 +28,9 @@ Markdown is golang template for go2md output
 
 ### func Run
 
-```golang
-func Run(out io.Writer, version string) error
-```
+<pre>
+func Run(out <a href="https://pkg.go.dev/io#Writer">io.Writer</a>, version string) error
+</pre>
 Run reads all "*.go" files (excluding "*_test.go") and writes markdown document out of it.
 
 

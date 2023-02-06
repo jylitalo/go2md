@@ -22,9 +22,9 @@ This section is empty.
 
 ### func NewCommand
 
-```golang
-func NewCommand(out io.Writer, version string) *cobra.Command
-```
+<pre>
+func NewCommand(out <a href="https://pkg.go.dev/io#Writer">io.Writer</a>, version string) <a href="https://pkg.go.dev/github.com/spf13/cobra#Command">*cobra.Command</a>
+</pre>
 NewCommand returns root level command.
 Supports `--version`.
 Default is to generate markdown from current directory.
