@@ -15,7 +15,6 @@ import (
 type varTypeOutput struct {
 	full string
 	link string
-	// base string
 }
 
 func templateFuncs(version string, imports map[string]string) template.FuncMap {
