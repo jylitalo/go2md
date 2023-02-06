@@ -29,9 +29,9 @@ This section is empty.
 
 ## Constants
 {{  if .Consts }}
-{{    range $val := .Consts }}```golang
+{{    range $val := .Consts }}<pre>
 {{ varElem $val "const" }}
-```
+</pre>
 {{-     if $val.Doc }}
 {{ $val.Doc }}
 {{-     end }}
@@ -43,9 +43,9 @@ This section is empty.
 ## Variables
 {{- if .Vars }}
 {{    range $val := .Vars }}
-```golang
+<pre>
 {{ varElem $val "var" }}
-```
+</pre>
 {{-     if $val.Doc }}
 {{ $val.Doc }}
 {{-     end }}
@@ -59,9 +59,9 @@ This section is empty.
 {{    range $val := .Funcs }}
 ### {{ funcHeading $val }}
 
-```golang
+<pre>
 {{       funcSection $val }}
-```
+</pre>
 {{-     if $val.Doc }}
 {{ $val.Doc }}
 {{      end }}
@@ -72,18 +72,18 @@ This section is empty.
 {{-   range $val := .Types }}
 ### type {{ $val.Name }}
 
-```golang
+<pre>
 {{      typeSection $val }}
-```
+</pre>
 {{-     if $val.Doc }}
 {{ $val.Doc }}
 {{-     end }}
 {{-     if $val.Funcs }}
 {{-       range $valFunc := $val.Funcs }}
 ### {{ funcHeading $valFunc }}
-```golang
+<pre>
 {{          funcSection $valFunc }}
-```
+</pre>
 {{-         if $valFunc.Doc }}
 {{ $valFunc.Doc }}
 {{-         end }}
@@ -92,9 +92,9 @@ This section is empty.
 {{-     if $val.Methods }}
 {{-       range $valMethods := $val.Methods }}
 ### {{ funcHeading $valMethods }}
-```golang
+<pre>
 {{          funcSection $valMethods }}
-```
+</pre>
 {{-         if $valMethods.Doc }}
 {{ $valMethods.Doc }}
 {{-         end }}
