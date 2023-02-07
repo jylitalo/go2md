@@ -49,12 +49,32 @@ func buildImportMap(specs []*ast.ImportSpec) map[string]string {
 
 func dirImports(astPackages map[string]*ast.Package) map[string]string {
 	mapping := map[string]string{}
+	stats := map[string]map[string][]string{}
 	for _, astPkg := range astPackages {
-		for _, f := range astPkg.Files {
-			for k, v := range buildImportMap(f.Imports) {
-				mapping[k] = v
+		for fname, f := range astPkg.Files {
+			for alias, fq := range buildImportMap(f.Imports) {
+				mapping[alias] = fq
+				if _, ok := stats[alias]; ok {
+					if _, ok := stats[alias][fq]; ok {
+						stats[alias][fq] = append(stats[alias][fq], fname)
+						continue
+					}
+					stats[alias][fq] = []string{fname}
+					continue
+				}
+				stats[alias] = map[string][]string{fq: {fname}}
 			}
 		}
+	}
+	for alias := range stats {
+		if len(stats[alias]) == 1 {
+			continue
+		}
+		files := []string{}
+		for fq, fname := range stats[alias] {
+			files = append(files, fmt.Sprintf("%s in %s", fq, strings.Join(fname, ", ")))
+		}
+		log.Warningf("%s has been imported as \n- %s", alias, strings.Join(files, "\n- "))
 	}
 	return mapping
 }
