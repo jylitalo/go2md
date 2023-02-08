@@ -86,8 +86,11 @@ func Run(out io.Writer, version string) error {
 	if err != nil {
 		return fmt.Errorf("unable to determine module name")
 	}
+	if !fileExists("./doc.go") {
+		log.Warning("doc.go is missing")
+	}
 	astPackages, err := parser.ParseDir(fset, ".", filter, parser.ParseComments)
-	if err != err {
+	if err != nil {
 		return err
 	}
 	imports := dirImports(astPackages)

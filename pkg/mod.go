@@ -57,3 +57,8 @@ func getPackageName(dir string) (string, error) {
 	}
 	return "", errors.New("unable to find go.mod with module name")
 }
+
+func fileExists(fname string) bool {
+	_, err := os.Stat(fname)
+	return err == nil || !os.IsNotExist(err)
+}
