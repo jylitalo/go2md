@@ -6,6 +6,7 @@ import (
 	"go/doc"
 	"go/token"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"text/template"
 
@@ -16,6 +17,11 @@ type varTypeOutput struct {
 	full string
 	link string
 }
+
+var (
+	basePrefix      = "    "
+	exportedType, _ = regexp.Compile("^[A-Z]")
+)
 
 func templateFuncs(version string, imports map[string]string) template.FuncMap {
 	return template.FuncMap{
@@ -44,40 +50,45 @@ func intoImportLink(text string, imports map[string]string) string {
 		return text
 	}
 	switch text {
-	case "bool", "char", "error", "float", "float32", "float64", "int", "int32", "int64", "string":
+	case "bool", "byte", "char", "error", "float", "float32", "float64", "int", "int32", "int64", "string":
 		return text
 	}
-	if strings.Contains(text, ".") {
-		fields := strings.SplitN(text, ".", 2)
-		if modPath, ok := imports[fields[0]]; ok {
-			modFields := strings.Split(modPath, "/")
-			if len(modFields) >= 3 {
-				mainPath := strings.Join(strings.Split(imports["main"], "/")[0:3], "/")
-				if strings.Join(modFields[0:3], "/") == mainPath {
-					relPath, err := filepath.Rel(imports["main"], modPath)
-					if err != nil {
-						log.WithFields(log.Fields{"imports['main']": imports["main"], "modPath": modPath}).Fatal("Unable to establish relative path")
-					}
-					return fmt.Sprintf(`<a href="%s/README.md#%s">%s</a>`, relPath, intoLink("type "+fields[1]), text)
-				}
-			}
-			return fmt.Sprintf(`<a href="https://pkg.go.dev/%s#%s">%s</a>`, modPath, fields[1], text)
+	if !strings.Contains(text, ".") {
+		if exportedType.MatchString(text) {
+			return fmt.Sprintf(`<a href="#%s">%s</a>`, intoLink("type "+text), text)
 		}
-		return fmt.Sprintf(`<a href="https://pkg.go.dev/%s#%s">%s</a>`, fields[0], fields[1], text)
+		log.Warningf("Internal type: %s", text)
+		return text
 	}
-	return fmt.Sprintf(`<a href="#%s">%s</a>`, intoLink("type "+text), text)
+	fields := strings.SplitN(text, ".", 2)
+	if modPath, ok := imports[fields[0]]; ok {
+		modFields := strings.Split(modPath, "/")
+		if len(modFields) >= 3 {
+			mainPath := strings.Join(strings.Split(imports["main"], "/")[0:3], "/")
+			if strings.Join(modFields[0:3], "/") == mainPath {
+				relPath, err := filepath.Rel(imports["main"], modPath)
+				if err != nil {
+					log.WithFields(log.Fields{"imports['main']": imports["main"], "modPath": modPath}).Fatal("Unable to establish relative path")
+				}
+				return fmt.Sprintf(`<a href="%s/README.md#%s">%s</a>`, relPath, intoLink("type "+fields[1]), text)
+			}
+		}
+		return fmt.Sprintf(`<a href="https://pkg.go.dev/%s#%s">%s</a>`, modPath, fields[1], text)
+	}
+	return fmt.Sprintf(`<a href="https://pkg.go.dev/%s#%s">%s</a>`, fields[0], fields[1], text)
 }
 
-func variableType(variable ast.Expr, depth int, imports map[string]string) varTypeOutput {
-	basePrefix := "    "
+func variableType(variable ast.Expr, depth int, hyphen bool, imports map[string]string) varTypeOutput {
 	switch t := variable.(type) {
 	case nil:
 		return varTypeOutput{full: "nil", link: "nil"}
 	case *ast.ArrayType:
-		varType := variableType(t.Elt, depth, imports)
+		varType := variableType(t.Elt, depth, hyphen, imports)
 		varType.full = "[]" + varType.full
 		if strings.HasPrefix(varType.link, "<a href=") {
 			varType.link = strings.Replace(varType.link, `">`, `">[]`, 1)
+		} else {
+			varType.link = "[]" + varType.link
 		}
 		return varType
 	case *ast.BasicLit:
@@ -102,11 +113,11 @@ func variableType(variable ast.Expr, depth int, imports map[string]string) varTy
 			log.WithField("t.Kind", t.Kind).Panic("unknown token kind")
 		}
 	case *ast.CallExpr:
-		funcName := variableType(t.Fun, depth, imports).full
+		funcName := variableType(t.Fun, depth, hyphen, imports).full
 		fullArgs := []string{}
 		linkArgs := []string{}
 		for _, arg := range t.Args {
-			varType := variableType(arg, depth, imports)
+			varType := variableType(arg, depth, hyphen, imports)
 			fullArgs = append(fullArgs, varType.full)
 			linkArgs = append(linkArgs, varType.link)
 		}
@@ -115,47 +126,60 @@ func variableType(variable ast.Expr, depth int, imports map[string]string) varTy
 			link: fmt.Sprintf("%s(%s)", funcName, strings.Join(linkArgs, ", ")),
 		}
 	case *ast.CompositeLit:
-		elts := []string{}
-		eltsType := variableType(t.Type, depth, imports).full
+		fulls := []string{}
+		links := []string{}
+		eltsType := variableType(t.Type, depth, hyphen, imports)
 		for _, elt := range t.Elts {
-			elts = append(elts, variableType(elt, depth, imports).full)
+			vto := variableType(elt, depth, hyphen, imports)
+			fulls = append(fulls, vto.full)
+			links = append(links, vto.link)
 		}
 		switch subType := t.Type.(type) {
 		case *ast.ArrayType, *ast.MapType, *ast.SelectorExpr:
-			lines := strings.Split(strings.Join(elts, ",\n"), "\n")
-			return varTypeOutput{full: fmt.Sprintf(
-				"%s{\n%s%s,\n}", eltsType, basePrefix,
-				strings.Join(lines, "\n"+basePrefix),
-			)}
+			fullLines := strings.Split(strings.Join(fulls, ",\n"), "\n")
+			linkLines := strings.Split(strings.Join(links, ",\n"), "\n")
+			return varTypeOutput{
+				full: fmt.Sprintf("%s{\n%s%s,\n}", eltsType.full, basePrefix, strings.Join(fullLines, "\n"+basePrefix)),
+				link: fmt.Sprintf("%s{\n%s%s,\n}", eltsType.link, basePrefix, strings.Join(linkLines, "\n"+basePrefix)),
+			}
 		case nil:
-			return varTypeOutput{full: strings.Join(elts, ",\n")}
+			return varTypeOutput{
+				full: strings.Join(fulls, ",\n"),
+				link: strings.Join(links, ",\n"),
+			}
 		default:
 			log.Panicf("Unknown CompositeLit: %#v", subType)
 		}
 	case *ast.Ellipsis:
-		varType := variableType(t.Elt, depth, imports)
+		varType := variableType(t.Elt, depth, hyphen, imports)
 		varType.full = "..." + varType.full
 		varType.link = "..." + varType.link
 		return varType
 	case *ast.FuncType:
-		return varTypeOutput{full: fmt.Sprintf(
-			"func(%s)%s", strings.Join(funcParams(t.Params, imports), ", "),
-			funcReturns(t.Results, imports),
-		)}
+		vtoParams := funcParams(t.Params, imports)
+		vtoReturns := funcReturns(t.Results, imports)
+		return varTypeOutput{
+			full: fmt.Sprintf("func(%s)%s", vtoParams.full, vtoReturns.full),
+			link: fmt.Sprintf("func(%s)%s", vtoParams.link, vtoReturns.link),
+		}
 	case *ast.Ident:
 		switch t.Name {
-		case "bool", "char", "error", "float", "float32", "float64", "int", "int32", "int64", "string":
+		case "bool", "byte", "char", "error", "float", "float32", "float64", "int", "int32", "int64", "string":
 			return varTypeOutput{full: t.Name, link: t.Name}
 		}
-		return varTypeOutput{
-			full: t.Name,
-			link: fmt.Sprintf(`<a href="#%s">%s</a>`, intoLink("type "+t.Name), t.Name),
+		if exportedType.MatchString(t.Name) {
+			return varTypeOutput{
+				full: t.Name,
+				link: fmt.Sprintf(`<a href="#%s">%s</a>`, intoLink("type "+t.Name), t.Name),
+			}
 		}
+		log.Warningf("Internal type: %s", t.Name)
+		return varTypeOutput{full: t.Name, link: t.Name}
 	case *ast.InterfaceType:
 		return varTypeOutput{full: "interface{}", link: "interface{}"}
 	case *ast.KeyValueExpr:
-		keyType := variableType(t.Key, depth, imports)
-		valueType := variableType(t.Value, depth, imports)
+		keyType := variableType(t.Key, depth, hyphen, imports)
+		valueType := variableType(t.Value, depth, hyphen, imports)
 		switch t.Value.(type) {
 		case *ast.CompositeLit:
 			switch t.Key.(type) {
@@ -166,8 +190,8 @@ func variableType(variable ast.Expr, depth int, imports map[string]string) varTy
 						strings.Join(strings.Split(valueType.full, "\n"), "\n"+basePrefix),
 					),
 					link: fmt.Sprintf(
-						"%s: {\n%s%s,\n}", keyType.full, basePrefix,
-						strings.Join(strings.Split(valueType.full, "\n"), "\n"+basePrefix),
+						"%s: {\n%s%s,\n}", keyType.link, basePrefix,
+						strings.Join(strings.Split(valueType.link, "\n"), "\n"+basePrefix),
 					),
 				}
 			}
@@ -177,8 +201,8 @@ func variableType(variable ast.Expr, depth int, imports map[string]string) varTy
 			link: keyType.link + ": " + valueType.link,
 		}
 	case *ast.MapType:
-		keyType := variableType(t.Key, depth, imports)
-		valueType := variableType(t.Value, depth, imports)
+		keyType := variableType(t.Key, depth, hyphen, imports)
+		valueType := variableType(t.Value, depth, hyphen, imports)
 		return varTypeOutput{
 			full: fmt.Sprintf("map[%s]%s", keyType.full, valueType.full),
 			link: fmt.Sprintf("map[%s]%s", keyType.link, valueType.link),
@@ -189,7 +213,7 @@ func variableType(variable ast.Expr, depth int, imports map[string]string) varTy
 			link: intoImportLink(fmt.Sprintf("%s.%s", t.X, t.Sel), imports),
 		}
 	case *ast.StarExpr:
-		varType := variableType(t.X, depth, imports)
+		varType := variableType(t.X, depth, hyphen, imports)
 		varType.full = "*" + varType.full
 		if strings.HasPrefix(varType.link, "<a href=") {
 			varType.link = strings.Replace(varType.link, `">`, `">*`, 1)
@@ -198,18 +222,26 @@ func variableType(variable ast.Expr, depth int, imports map[string]string) varTy
 		}
 		return varType
 	case *ast.StructType:
-		lines := []string{}
+		fulls := []string{}
+		links := []string{}
 		for _, field := range t.Fields.List {
-			lines = append(lines, typeField(field, depth+1, true, imports))
+			fulls = append(fulls, typeField(field, depth+1, hyphen, imports).full)
+			links = append(links, typeField(field, depth+1, hyphen, imports).link)
+		}
+		if hyphen {
+			return varTypeOutput{
+				full: fmt.Sprintf("struct\n%s", strings.Join(fulls, "\n")),
+				link: fmt.Sprintf("struct\n%s", strings.Join(links, "\n")),
+			}
 		}
 		return varTypeOutput{
-			full: fmt.Sprintf("struct\n%s", strings.Join(lines, "\n")),
-			link: fmt.Sprintf("struct\n%s", strings.Join(lines, "\n")),
+			full: fmt.Sprintf("struct {\n%s\n}", strings.Join(fulls, "\n")),
+			link: fmt.Sprintf("struct {\n%s\n}", strings.Join(links, "\n")),
 		}
 	case *ast.UnaryExpr:
 		switch t.Op {
 		case token.AND:
-			varType := variableType(t.X, depth, imports)
+			varType := variableType(t.X, depth, hyphen, imports)
 			varType.full = "&" + varType.full
 			if strings.HasPrefix(varType.link, "<a href=") {
 				varType.link = strings.Replace(varType.link, `">`, `">&`, 1)
@@ -229,24 +261,35 @@ func variableType(variable ast.Expr, depth int, imports map[string]string) varTy
 	return varTypeOutput{}
 }
 
-func typeField(field *ast.Field, depth int, hyphen bool, imports map[string]string) string {
-	line := ""
-	prefix := "    "
-	for i := 0; i < depth; i++ {
-		prefix = prefix + "    "
+func typeField(field *ast.Field, depth int, hyphen bool, imports map[string]string) varTypeOutput {
+	prefix := ""
+	for i := 0; i <= depth; i++ {
+		prefix = prefix + basePrefix
 	}
 	if hyphen {
 		prefix = prefix + "- "
 	}
 	switch t := field.Type.(type) {
 	case *ast.FuncType:
-		line = fmt.Sprintf(
-			"%sfunc %s(%s)%s", prefix, field.Names[0],
-			strings.Join(funcParams(t.Params, imports), ", "), funcReturns(t.Results, imports))
+		fparams := funcParams(t.Params, imports)
+		freturns := funcReturns(t.Results, imports)
+		return varTypeOutput{
+			full: fmt.Sprintf("%sfunc %s(%s)%s", prefix, field.Names[0], fparams.full, freturns.full),
+			link: fmt.Sprintf("%sfunc %s(%s)%s", prefix, field.Names[0], fparams.link, freturns.link),
+		}
 	default:
-		line = fmt.Sprintf("%s%s %s", prefix, field.Names[0], variableType(field.Type, depth, imports).link)
+		vto := variableType(field.Type, depth, hyphen, imports)
+		fullIdx := strings.LastIndex(vto.full, "\n}")
+		linkIdx := strings.LastIndex(vto.link, "\n}")
+		if fullIdx != -1 {
+			vto.full = vto.full[:fullIdx+1] + prefix + vto.full[fullIdx+1:]
+			vto.link = vto.link[:linkIdx+1] + prefix + vto.link[linkIdx+1:]
+		}
+		return varTypeOutput{
+			full: fmt.Sprintf("%s%s %s", prefix, field.Names[0], vto.full),
+			link: fmt.Sprintf("%s%s %s", prefix, field.Names[0], vto.link),
+		}
 	}
-	return line
 }
 
 func funcReceiver(funcObj doc.Func) string {
@@ -261,53 +304,54 @@ func funcReceiver(funcObj doc.Func) string {
 // funcParams combines function parameters into string.
 // If you start from "funcObj doc.Func", you will get ast.Field from
 // "funcObj.Decl.Type.Params.List"
-func funcParams(fields *ast.FieldList, imports map[string]string) []string {
+func funcParams(fields *ast.FieldList, imports map[string]string) varTypeOutput {
 	if fields == nil {
-		return nil
+		return varTypeOutput{full: "", link: ""}
 	}
-	params := []string{}
+	fulls := []string{}
+	links := []string{}
 	for _, paramList := range fields.List {
-		varType := variableType(paramList.Type, 0, imports)
-		paramType := varType.full
-		if imports != nil {
-			paramType = varType.link
-		}
+		varType := variableType(paramList.Type, 0, false, imports)
 		if len(paramList.Names) == 0 {
-			params = append(params, paramType)
+			fulls = append(fulls, varType.full)
+			links = append(links, varType.link)
 			continue
 		}
+		names := []string{}
 		for _, param := range paramList.Names {
-			params = append(params, param.Name)
+			names = append(names, param.Name)
 		}
-		last := len(params) - 1
-		params[last] = params[last] + " " + paramType
+		fulls = append(fulls, strings.Join(names, ", ")+" "+varType.full)
+		links = append(links, strings.Join(names, ", ")+" "+varType.link)
 	}
-	return params
+	return varTypeOutput{
+		full: strings.Join(fulls, ", "),
+		link: strings.Join(links, ", "),
+	}
 }
 
 // funcReturns combines function return values into string.
 // If you start from "funcObj doc.Func", you will get ast.Field from
 // "funcObj.Decl.Type.Results"
-func funcReturns(fields *ast.FieldList, imports map[string]string) string {
+func funcReturns(fields *ast.FieldList, imports map[string]string) varTypeOutput {
 	switch {
 	case fields == nil:
-		return ""
-	case len(fields.List) == 1 && imports == nil:
-		return " " + variableType(fields.List[0].Type, 0, nil).full
+		return varTypeOutput{full: "", link: ""}
 	case len(fields.List) == 1:
-		return " " + variableType(fields.List[0].Type, 0, imports).link
-	case imports == nil:
-		r := []string{}
-		for _, param := range fields.List {
-			r = append(r, variableType(param.Type, 0, imports).full)
-		}
-		return fmt.Sprintf(" (%s)", strings.Join(r, ", "))
+		vto := variableType(fields.List[0].Type, 0, false, imports)
+		return varTypeOutput{full: " " + vto.full, link: " " + vto.link}
 	default:
-		r := []string{}
+		fulls := []string{}
+		links := []string{}
 		for _, param := range fields.List {
-			r = append(r, variableType(param.Type, 0, imports).link)
+			vto := variableType(param.Type, 0, false, imports)
+			fulls = append(fulls, vto.full)
+			links = append(links, vto.link)
 		}
-		return fmt.Sprintf(" (%s)", strings.Join(r, ", "))
+		return varTypeOutput{
+			full: fmt.Sprintf(" (%s)", strings.Join(fulls, ", ")),
+			link: fmt.Sprintf(" (%s)", strings.Join(links, ", ")),
+		}
 	}
 }
 
@@ -318,8 +362,8 @@ func funcHeading(funcObj doc.Func) string {
 func funcElem(funcObj doc.Func) string {
 	text := fmt.Sprintf(
 		"func %s%s(%s)%s", funcReceiver(funcObj), funcObj.Name,
-		strings.Join(funcParams(funcObj.Decl.Type.Params, nil), ", "),
-		funcReturns(funcObj.Decl.Type.Results, nil),
+		funcParams(funcObj.Decl.Type.Params, nil).full,
+		funcReturns(funcObj.Decl.Type.Results, nil).full,
 	)
 	link := intoLink(fmt.Sprintf("func %s%s", funcReceiver(funcObj), funcObj.Name))
 	return fmt.Sprintf("- [%s](#%s)", text, link)
@@ -329,8 +373,8 @@ func funcSection(imports map[string]string) func(doc.Func) string {
 	return func(funcObj doc.Func) string {
 		return fmt.Sprintf(
 			"func %s%s(%s)%s", funcReceiver(funcObj), funcObj.Name,
-			strings.Join(funcParams(funcObj.Decl.Type.Params, imports), ", "),
-			funcReturns(funcObj.Decl.Type.Results, imports),
+			funcParams(funcObj.Decl.Type.Params, imports).link,
+			funcReturns(funcObj.Decl.Type.Results, imports).link,
 		)
 	}
 }
@@ -377,12 +421,12 @@ func typeSection(imports map[string]string) func(doc.Type) string {
 		for _, spec := range typeObj.Decl.Specs {
 			switch t := spec.(*ast.TypeSpec).Type.(type) {
 			case *ast.FuncType, *ast.Ident:
-				typeDesc := fmt.Sprintf("<pre>\ntype %s %s\n</pre>\n", typeObj.Name, variableType(t, 0, imports).full)
+				typeDesc := fmt.Sprintf("<pre>\ntype %s %s\n</pre>\n", typeObj.Name, variableType(t, 0, false, imports).full)
 				return typeDesc
 			case *ast.InterfaceType:
 				typeName = "interface"
 				for _, field := range t.Methods.List {
-					lines = append(lines, typeField(field, 0, false, imports))
+					lines = append(lines, typeField(field, 0, false, imports).link)
 				}
 				if len(t.Methods.List) > 0 {
 					lines = append(lines, "")
@@ -390,7 +434,7 @@ func typeSection(imports map[string]string) func(doc.Type) string {
 			case *ast.StructType:
 				typeName = "struct"
 				for _, field := range t.Fields.List {
-					line := typeField(field, 0, false, imports)
+					line := typeField(field, 0, false, imports).link
 					if field.Tag != nil {
 						line = line + " " + field.Tag.Value
 					}
@@ -420,7 +464,7 @@ func varElem(imports map[string]string) func(doc.Value, string) string {
 			varItem := spec.(*ast.ValueSpec)
 			paramType := ""
 			if varItem.Type != nil {
-				paramType = " " + variableType(varItem.Type, 0, imports).full
+				paramType = " " + variableType(varItem.Type, 0, false, imports).full
 			}
 			paramName := ""
 			if len(varItem.Names) > 0 {
@@ -430,7 +474,7 @@ func varElem(imports map[string]string) func(doc.Value, string) string {
 			switch len(varItem.Values) {
 			case 0:
 			case 1:
-				value := variableType(varItem.Values[0], 0, imports).full
+				value := variableType(varItem.Values[0], 0, false, imports).full
 				value = strings.Trim(value, paramType)
 				switch varItem.Values[0].(type) {
 				case *ast.ArrayType, *ast.MapType:
@@ -441,7 +485,7 @@ func varElem(imports map[string]string) func(doc.Value, string) string {
 			default:
 				values := []string{}
 				for _, value := range varItem.Values {
-					v := variableType(value, 0, imports).full
+					v := variableType(value, 0, false, imports).full
 					switch value.(type) {
 					case *ast.ArrayType, *ast.MapType:
 						v = paramType + v
