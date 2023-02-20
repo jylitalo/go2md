@@ -85,10 +85,7 @@ func typeField(field *ast.Field, depth int, hyphen bool, imports map[string]stri
 		fparams := funcParams(t.Params, imports)
 		freturns := funcReturns(t.Results, imports)
 		msg := fmt.Sprintf("%sfunc %s(%%s)%%s", prefix, field.Names[0])
-		return varTypeOutput{
-			plainText: fmt.Sprintf(msg, fparams.plainText, freturns.plainText),
-			markdown:  fmt.Sprintf(msg, fparams.markdown, freturns.markdown),
-		}
+		return sprintf(msg, fparams, freturns)
 	default:
 		vto := variableType(field.Type, depth, hyphen, imports)
 		plainIdx := strings.LastIndex(vto.plainText, "\n}")
@@ -97,8 +94,8 @@ func typeField(field *ast.Field, depth int, hyphen bool, imports map[string]stri
 			vto.plainText = vto.plainText[:plainIdx+1] + prefix + vto.plainText[plainIdx+1:]
 			vto.markdown = vto.markdown[:mdIdx+1] + prefix + vto.markdown[mdIdx+1:]
 		}
-		msg := fmt.Sprintf("%s%s ", prefix, field.Names[0])
-		return varTypeOutput{plainText: msg + vto.plainText, markdown: msg + vto.markdown}
+		msg := fmt.Sprintf("%s%s %%s", prefix, field.Names[0])
+		return sprintf(msg, vto)
 	}
 }
 
@@ -116,7 +113,7 @@ func funcReceiver(funcObj doc.Func) string {
 // "funcObj.Decl.Type.Params.List"
 func funcParams(fields *ast.FieldList, imports map[string]string) varTypeOutput {
 	if fields == nil {
-		return plainTextVarType("")
+		return sprintf("")
 	}
 	varTypes := []varTypeOutput{}
 	for _, paramList := range fields.List {
@@ -130,7 +127,7 @@ func funcParams(fields *ast.FieldList, imports map[string]string) varTypeOutput 
 			nameList = append(nameList, param.Name)
 		}
 		names := strings.Join(nameList, ", ")
-		vto.prefix(names+" ", false)
+		vto = sprintf(names+" %s", vto)
 		varTypes = append(varTypes, vto)
 	}
 	return join(varTypes, ", ")
@@ -142,10 +139,10 @@ func funcParams(fields *ast.FieldList, imports map[string]string) varTypeOutput 
 func funcReturns(fields *ast.FieldList, imports map[string]string) varTypeOutput {
 	switch {
 	case fields == nil:
-		return plainTextVarType("")
+		return sprintf("")
 	case len(fields.List) == 1:
 		vto := variableType(fields.List[0].Type, 0, false, imports)
-		return varTypeOutput{plainText: " " + vto.plainText, markdown: " " + vto.markdown}
+		return sprintf(" %s", vto)
 	default:
 		varTypes := []varTypeOutput{}
 		for _, param := range fields.List {

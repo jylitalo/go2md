@@ -40,16 +40,9 @@ func sprintf(format string, elems ...varTypeOutput) varTypeOutput {
 	}
 }
 
-func plainTextVarType(value string) varTypeOutput {
-	return varTypeOutput{
-		plainText: value,
-		markdown:  value,
-	}
-}
-
-func (vto *varTypeOutput) prefix(prefixText string, inLinkText bool) varTypeOutput {
+func (vto *varTypeOutput) prefix(prefixText string) varTypeOutput {
 	vto.plainText = prefixText + vto.plainText
-	if inLinkText && strings.HasPrefix(vto.markdown, "<a href=") {
+	if strings.HasPrefix(vto.markdown, "<a href=") {
 		vto.markdown = strings.Replace(vto.markdown, `">`, `">`+prefixText, 1)
 	} else {
 		vto.markdown = prefixText + vto.markdown
@@ -65,10 +58,10 @@ func (vto *varTypeOutput) replace(old, new string, n int) {
 func variableType(variable ast.Expr, depth int, hyphen bool, imports map[string]string) varTypeOutput {
 	switch t := variable.(type) {
 	case nil:
-		return plainTextVarType("nil")
+		return sprintf("nil")
 	case *ast.ArrayType:
 		varType := variableType(t.Elt, depth, hyphen, imports)
-		return varType.prefix("[]", true)
+		return varType.prefix("[]")
 	case *ast.BasicLit:
 		if t.Value != "" {
 			return varTypeOutput{
@@ -78,15 +71,15 @@ func variableType(variable ast.Expr, depth int, hyphen bool, imports map[string]
 		}
 		switch t.Kind {
 		case token.INT:
-			return plainTextVarType("int")
+			return sprintf("int")
 		case token.FLOAT:
-			return plainTextVarType("float")
+			return sprintf("float")
 		case token.IMAG:
-			return plainTextVarType("imag")
+			return sprintf("imag")
 		case token.CHAR:
-			return plainTextVarType("char")
+			return sprintf("char")
 		case token.STRING:
-			return plainTextVarType("string")
+			return sprintf("string")
 		default:
 			log.WithField("t.Kind", t.Kind).Panic("unknown token kind")
 		}
@@ -115,8 +108,7 @@ func variableType(variable ast.Expr, depth int, hyphen bool, imports map[string]
 			log.Panicf("Unknown CompositeLit: %#v", subType)
 		}
 	case *ast.Ellipsis:
-		varType := variableType(t.Elt, depth, hyphen, imports)
-		return varType.prefix("...", false)
+		return sprintf("...%s", variableType(t.Elt, depth, hyphen, imports))
 	case *ast.FuncType:
 		vtoParams := funcParams(t.Params, imports)
 		vtoReturns := funcReturns(t.Results, imports)
@@ -124,7 +116,7 @@ func variableType(variable ast.Expr, depth int, hyphen bool, imports map[string]
 	case *ast.Ident:
 		switch t.Name {
 		case "bool", "byte", "char", "error", "float", "float32", "float64", "int", "int32", "int64", "string":
-			return plainTextVarType(t.Name)
+			return sprintf(t.Name)
 		}
 		if exportedType.MatchString(t.Name) {
 			return varTypeOutput{
@@ -133,9 +125,9 @@ func variableType(variable ast.Expr, depth int, hyphen bool, imports map[string]
 			}
 		}
 		log.Warningf("Internal type: %s", t.Name)
-		return plainTextVarType(t.Name)
+		return sprintf(t.Name)
 	case *ast.InterfaceType:
-		return plainTextVarType("interface{}")
+		return sprintf("interface{}")
 	case *ast.KeyValueExpr:
 		keyType := variableType(t.Key, depth, hyphen, imports)
 		valueType := variableType(t.Value, depth, hyphen, imports)
@@ -144,7 +136,7 @@ func variableType(variable ast.Expr, depth int, hyphen bool, imports map[string]
 			switch t.Key.(type) {
 			case *ast.BasicLit:
 				valueType.replace("\n", "\n"+basePrefix, -1)
-				valueType.prefix(basePrefix, false)
+				valueType = sprintf(basePrefix+"%s", valueType)
 				return sprintf("%s: {\n%s,\n}", keyType, valueType)
 			}
 		}
@@ -158,7 +150,7 @@ func variableType(variable ast.Expr, depth int, hyphen bool, imports map[string]
 		return varTypeOutput{plainText: msg, markdown: intoImportLink(msg, imports)}
 	case *ast.StarExpr:
 		vto := variableType(t.X, depth, hyphen, imports)
-		return vto.prefix("*", true)
+		return vto.prefix("*")
 	case *ast.StructType:
 		varTypes := []varTypeOutput{}
 		for _, field := range t.Fields.List {
@@ -166,14 +158,14 @@ func variableType(variable ast.Expr, depth int, hyphen bool, imports map[string]
 		}
 		vto := join(varTypes, "\n")
 		if hyphen {
-			return vto.prefix("struct\n", false)
+			return sprintf("struct\n%s", vto)
 		}
 		return sprintf("struct {\n%s\n}", vto)
 	case *ast.UnaryExpr:
 		switch t.Op {
 		case token.AND:
 			vto := variableType(t.X, depth, hyphen, imports)
-			return vto.prefix("&", true)
+			return vto.prefix("&")
 		default:
 			log.Panicf("unknown unary type %d for %s", t.Op, t.X)
 		}
