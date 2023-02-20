@@ -133,7 +133,7 @@ func funcParams(fields *ast.FieldList, imports map[string]string) varTypeOutput 
 		vto.prefix(names+" ", false)
 		varTypes = append(varTypes, vto)
 	}
-	return varTypeJoin(varTypes, ", ")
+	return join(varTypes, ", ")
 }
 
 // funcReturns combines function return values into string.
@@ -151,12 +151,7 @@ func funcReturns(fields *ast.FieldList, imports map[string]string) varTypeOutput
 		for _, param := range fields.List {
 			varTypes = append(varTypes, variableType(param.Type, 0, false, imports))
 		}
-		vto := varTypeJoin(varTypes, ", ")
-		msg := " (%s)"
-		return varTypeOutput{
-			plainText: fmt.Sprintf(msg, vto.plainText),
-			markdown:  fmt.Sprintf(msg, vto.markdown),
-		}
+		return sprintf(" (%s)", join(varTypes, ", "))
 	}
 }
 
@@ -238,10 +233,24 @@ func typeSection(imports map[string]string) func(doc.Type) string {
 				}
 			case *ast.StructType:
 				typeName = "struct"
+				maxLength := 0
+				structLines := []string{}
+				diffLen := []int{}
 				for _, field := range t.Fields.List {
-					line := typeField(field, 0, false, imports).markdown
+					info := typeField(field, 0, false, imports)
+					plainLen := len(strings.Split(info.plainText, "\n")[0])
+					mdLen := len(strings.Split(info.markdown, "\n")[0])
+					if plainLen > maxLength {
+						maxLength = plainLen
+					}
+					diffLen = append(diffLen, mdLen-plainLen)
+					structLines = append(structLines, info.markdown)
+				}
+				for idx, field := range t.Fields.List {
+					line := structLines[idx]
 					if field.Tag != nil {
-						line = line + " " + field.Tag.Value
+						msg := fmt.Sprintf("%%-%ds %%s", maxLength+diffLen[idx])
+						line = fmt.Sprintf(msg, line, field.Tag.Value)
 					}
 					lines = append(lines, line)
 				}

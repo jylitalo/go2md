@@ -14,7 +14,7 @@ type varTypeOutput struct {
 	markdown  string
 }
 
-func varTypeJoin(elems []varTypeOutput, sep string) varTypeOutput {
+func join(elems []varTypeOutput, sep string) varTypeOutput {
 	plains := []string{}
 	markdowns := []string{}
 	for _, item := range elems {
@@ -27,16 +27,24 @@ func varTypeJoin(elems []varTypeOutput, sep string) varTypeOutput {
 	}
 }
 
+func sprintf(format string, elems ...varTypeOutput) varTypeOutput {
+	plainText := []any{}
+	markdown := []any{}
+	for _, elem := range elems {
+		plainText = append(plainText, elem.plainText)
+		markdown = append(markdown, elem.markdown)
+	}
+	return varTypeOutput{
+		plainText: fmt.Sprintf(format, plainText...),
+		markdown:  fmt.Sprintf(format, markdown...),
+	}
+}
+
 func plainTextVarType(value string) varTypeOutput {
 	return varTypeOutput{
 		plainText: value,
 		markdown:  value,
 	}
-}
-
-func (vto *varTypeOutput) replace(old, new string, n int) {
-	vto.plainText = strings.Replace(vto.plainText, old, new, n)
-	vto.markdown = strings.Replace(vto.markdown, old, new, n)
 }
 
 func (vto *varTypeOutput) prefix(prefixText string, inLinkText bool) varTypeOutput {
@@ -47,6 +55,11 @@ func (vto *varTypeOutput) prefix(prefixText string, inLinkText bool) varTypeOutp
 		vto.markdown = prefixText + vto.markdown
 	}
 	return *vto
+}
+
+func (vto *varTypeOutput) replace(old, new string, n int) {
+	vto.plainText = strings.Replace(vto.plainText, old, new, n)
+	vto.markdown = strings.Replace(vto.markdown, old, new, n)
 }
 
 func variableType(variable ast.Expr, depth int, hyphen bool, imports map[string]string) varTypeOutput {
@@ -83,12 +96,7 @@ func variableType(variable ast.Expr, depth int, hyphen bool, imports map[string]
 		for _, arg := range t.Args {
 			varTypes = append(varTypes, variableType(arg, depth, hyphen, imports))
 		}
-		vto := varTypeJoin(varTypes, ", ")
-		msg := funcName + "(%s)"
-		return varTypeOutput{
-			plainText: fmt.Sprintf(msg, vto.plainText),
-			markdown:  fmt.Sprintf(msg, vto.markdown),
-		}
+		return sprintf(funcName+"(%s)", join(varTypes, ", "))
 	case *ast.CompositeLit:
 		eltsType := variableType(t.Type, depth, hyphen, imports)
 		varTypes := []varTypeOutput{}
@@ -97,15 +105,12 @@ func variableType(variable ast.Expr, depth int, hyphen bool, imports map[string]
 		}
 		switch subType := t.Type.(type) {
 		case *ast.ArrayType, *ast.MapType, *ast.SelectorExpr:
-			vto := varTypeJoin(varTypes, ",\n")
+			vto := join(varTypes, ",\n")
 			vto.replace("\n", "\n"+basePrefix, -1)
 			msg := fmt.Sprintf("%s{\n%s%%s,\n}", eltsType.plainText, basePrefix)
-			return varTypeOutput{
-				plainText: fmt.Sprintf(msg, vto.plainText),
-				markdown:  fmt.Sprintf(msg, vto.markdown),
-			}
+			return sprintf(msg, vto)
 		case nil:
-			return varTypeJoin(varTypes, ",\n")
+			return join(varTypes, ",\n")
 		default:
 			log.Panicf("Unknown CompositeLit: %#v", subType)
 		}
@@ -115,11 +120,7 @@ func variableType(variable ast.Expr, depth int, hyphen bool, imports map[string]
 	case *ast.FuncType:
 		vtoParams := funcParams(t.Params, imports)
 		vtoReturns := funcReturns(t.Results, imports)
-		msg := "func(%s)%s"
-		return varTypeOutput{
-			plainText: fmt.Sprintf(msg, vtoParams.plainText, vtoReturns.plainText),
-			markdown:  fmt.Sprintf(msg, vtoParams.markdown, vtoReturns.markdown),
-		}
+		return sprintf("func(%s)%s", vtoParams, vtoReturns)
 	case *ast.Ident:
 		switch t.Name {
 		case "bool", "byte", "char", "error", "float", "float32", "float64", "int", "int32", "int64", "string":
@@ -142,46 +143,32 @@ func variableType(variable ast.Expr, depth int, hyphen bool, imports map[string]
 		case *ast.CompositeLit:
 			switch t.Key.(type) {
 			case *ast.BasicLit:
-				msg := "%s: {\n%s%s,\n}"
 				valueType.replace("\n", "\n"+basePrefix, -1)
-				return varTypeOutput{
-					plainText: fmt.Sprintf(msg, keyType.plainText, basePrefix, valueType.plainText),
-					markdown:  fmt.Sprintf(msg, keyType.markdown, basePrefix, valueType.markdown),
-				}
+				valueType.prefix(basePrefix, false)
+				return sprintf("%s: {\n%s,\n}", keyType, valueType)
 			}
 		}
-		return varTypeOutput{
-			plainText: keyType.plainText + ": " + valueType.plainText,
-			markdown:  keyType.markdown + ": " + valueType.markdown,
-		}
+		return sprintf("%s: %s", keyType, valueType)
 	case *ast.MapType:
 		keyType := variableType(t.Key, depth, hyphen, imports)
 		valueType := variableType(t.Value, depth, hyphen, imports)
-		msg := "map[%s]%s"
-		return varTypeOutput{
-			plainText: fmt.Sprintf(msg, keyType.plainText, valueType.plainText),
-			markdown:  fmt.Sprintf(msg, keyType.markdown, valueType.markdown),
-		}
+		return sprintf("map[%s]%s", keyType, valueType)
 	case *ast.SelectorExpr:
 		msg := fmt.Sprintf("%s.%s", t.X, t.Sel)
 		return varTypeOutput{plainText: msg, markdown: intoImportLink(msg, imports)}
 	case *ast.StarExpr:
-		varType := variableType(t.X, depth, hyphen, imports)
-		return varType.prefix("*", true)
+		vto := variableType(t.X, depth, hyphen, imports)
+		return vto.prefix("*", true)
 	case *ast.StructType:
 		varTypes := []varTypeOutput{}
 		for _, field := range t.Fields.List {
 			varTypes = append(varTypes, typeField(field, depth+1, hyphen, imports))
 		}
-		vto := varTypeJoin(varTypes, "\n")
+		vto := join(varTypes, "\n")
 		if hyphen {
 			return vto.prefix("struct\n", false)
 		}
-		msg := "struct {\n%s\n}"
-		return varTypeOutput{
-			plainText: fmt.Sprintf(msg, vto.plainText),
-			markdown:  fmt.Sprintf(msg, vto.markdown),
-		}
+		return sprintf("struct {\n%s\n}", vto)
 	case *ast.UnaryExpr:
 		switch t.Op {
 		case token.AND:
