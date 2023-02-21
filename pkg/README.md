@@ -8,8 +8,8 @@ Imports: 16
 ## Index
 - [Variables](variables)
 - [func Output(out io.Writer, directory, filename string) (io.Writer, func() error, error)](#func-output)
-- [func RecursiveRun(out io.Writer, directory, output, version string) error](#func-recursiverun)
 - [func Run(out io.Writer, directory, version string) error](#func-run)
+- [func RunDirTree(out io.Writer, directory, output, version string) error](#func-rundirtree)
 
 ## Examples
 
@@ -37,20 +37,20 @@ func Output(out <a href="https://pkg.go.dev/io#Writer">io.Writer</a>, directory,
 Output creates output file if needed and returns writer to it
 
 
-### func RecursiveRun
-
-<pre>
-func RecursiveRun(out <a href="https://pkg.go.dev/io#Writer">io.Writer</a>, directory, output, version string) error
-</pre>
-RecursiveRun checks given directory and its all subdirectories for golang
-
-
 ### func Run
 
 <pre>
 func Run(out <a href="https://pkg.go.dev/io#Writer">io.Writer</a>, directory, version string) error
 </pre>
 Run reads all "*.go" files (excluding "*_test.go") and writes markdown document out of it.
+
+
+### func RunDirTree
+
+<pre>
+func RunDirTree(out <a href="https://pkg.go.dev/io#Writer">io.Writer</a>, directory, output, version string) error
+</pre>
+RunDirTree checks given directory and its subdirectories for golang
 
 
 
