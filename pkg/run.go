@@ -9,6 +9,8 @@ import (
 	"go/token"
 	"io"
 	"io/fs"
+	"os"
+	"path/filepath"
 	"strings"
 	"text/template"
 
@@ -79,14 +81,58 @@ func dirImports(astPackages map[string]*ast.Package) map[string]string {
 	return mapping
 }
 
+// Output creates output file if needed and returns writer to it
+func Output(out io.Writer, directory, filename string) (io.Writer, func() error, error) {
+	if filename == "" {
+		return out, nil, nil
+	}
+	fname := directory + "/" + filename
+	fout, err := os.Create(fname)
+	if err != nil {
+		log.WithFields(log.Fields{"err": err, "fname": fname}).Fatal("failed to create file")
+		return out, nil, err
+	}
+	return fout, fout.Close, err
+}
+
+// RunDirTree checks given directory and its subdirectories for golang
+func RunDirTree(out io.Writer, directory, output, version string) error {
+	paths := map[string]bool{}
+	err := filepath.WalkDir(directory, func(path string, d fs.DirEntry, err error) error {
+		if d.IsDir() {
+			return nil
+		}
+		if strings.HasSuffix(path, ".go") {
+			paths[filepath.Dir(path)] = true
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	for path := range paths {
+		out, close, err := Output(out, path, output)
+		if err != nil {
+			return err
+		}
+		if close != nil {
+			defer close()
+		}
+		if err = Run(out, path, version); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Run reads all "*.go" files (excluding "*_test.go") and writes markdown document out of it.
-func Run(out io.Writer, version string) error {
+func Run(out io.Writer, directory, version string) error {
 	fset := token.NewFileSet()
-	modName, err := getPackageName(".")
+	modName, err := getPackageName(directory)
 	if err != nil {
 		return fmt.Errorf("unable to determine module name")
 	}
-	if !fileExists("./doc.go") {
+	if !fileExists(directory + "/doc.go") {
 		log.Warning("doc.go is missing")
 	}
 	astPackages, err := parser.ParseDir(fset, ".", filter, parser.ParseComments)

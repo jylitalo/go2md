@@ -22,7 +22,7 @@ func TestRun(t *testing.T) {
 			t.Error("failed to read README.md")
 		}
 
-		err = Run(&b, version)
+		err = Run(&b, ".", version)
 		if err != nil {
 			t.Error("Run() returned err: " + err.Error())
 		}
