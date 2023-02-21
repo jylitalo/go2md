@@ -4,7 +4,7 @@
 Package cmd provides command line arguments and flags parsing with spf13/cobra and
 calls backend functionality from pkg package.
 
-Imports: 6
+Imports: 5
 
 ## Index
 - [func NewCommand(out io.Writer, version string) *cobra.Command](#func-newcommand)

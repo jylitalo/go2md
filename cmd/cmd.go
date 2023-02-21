@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"io"
-	"os"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -21,18 +20,25 @@ func NewCommand(out io.Writer, version string) *cobra.Command {
 				out.Write([]byte(fmt.Sprintf("go2md %s\n", version)))
 				return nil
 			}
-			if flag, _ := cmd.Flags().GetString("output"); flag != "" {
-				fout, err := os.Create(flag)
-				if err != nil {
-					log.WithFields(log.Fields{"err": err, "filename": flag}).Fatal("failed to create file")
-				}
-				defer fout.Close()
-				out = fout
+			dir, _ := cmd.Flags().GetString("directory")
+			output, _ := cmd.Flags().GetString("output")
+			recursive, _ := cmd.Flags().GetBool("recursive")
+			if recursive {
+				return pkg.RunDirTree(out, dir, output, version)
 			}
-			return pkg.Run(out, version)
+			out, close, err := pkg.Output(out, dir, output)
+			if err != nil {
+				log.WithFields(log.Fields{"err": err, "filename": output}).Fatal("failed to create file")
+			}
+			if close != nil {
+				defer close()
+			}
+			return pkg.Run(out, dir, version)
 		},
 	}
-	cmd.Flags().BoolP("version", "v", false, "print go2md version")
+	cmd.Flags().StringP("directory", "d", ".", "root directory")
 	cmd.Flags().StringP("output", "o", "", "write output to file")
+	cmd.Flags().BoolP("recursive", "r", false, "go directories recursively")
+	cmd.Flags().BoolP("version", "v", false, "print go2md version")
 	return cmd
 }
