@@ -99,10 +99,7 @@ func Output(out io.Writer, directory, filename string) (io.Writer, func() error,
 func RunDirTree(out io.Writer, directory, output, version string) error {
 	paths := map[string]bool{}
 	err := filepath.WalkDir(directory, func(path string, d fs.DirEntry, err error) error {
-		if d.IsDir() {
-			return nil
-		}
-		if strings.HasSuffix(path, ".go") {
+		if !d.IsDir() && strings.HasSuffix(path, ".go") {
 			paths[filepath.Dir(path)] = true
 		}
 		return nil
