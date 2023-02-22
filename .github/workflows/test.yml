@@ -1,0 +1,28 @@
+name: test
+on: [push]
+jobs:
+  tests:
+    name: Automated tests
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions/setup-go@v3
+      with:
+        go-version: '1.19'
+    - uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+    - name: Run tests
+      run: go test ./... -v
+    - name: Compile binary
+      run: go build go2md.go
+    - name: Run recursive go2md
+      run: ./go2md --recursive --output README.md
+
