@@ -22,7 +22,7 @@ This section is empty.
 
 ## Functions
 
-### func [NewCommand](./cmd.go#L15)
+### func [NewCommand](./cmd/cmd.go#L16)
 
 <pre>
 func NewCommand(out <a href="https://pkg.go.dev/io#Writer">io.Writer</a>, version string) <a href="https://pkg.go.dev/github.com/spf13/cobra#Command">*cobra.Command</a>
