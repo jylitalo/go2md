@@ -140,18 +140,18 @@ func scanFile(filename string) map[string]int {
 			if len(words) >= 3 && strings.HasPrefix(words[1], "(") && isExported(words[2]) {
 				words[2] = strings.Split(words[2], "(")[0]
 				key := intoLink(strings.Join(words[0:3], " "))
-				lineNumbers[key] = lineNumber
+				lineNumbers[key] = lineNumber + 1
 			}
 			if len(words) >= 2 && isExported(words[1]) {
 				words[1] = strings.Split(words[1], "(")[0]
 				key := intoLink(strings.Join(words[0:2], " "))
-				lineNumbers[key] = lineNumber
+				lineNumbers[key] = lineNumber + 1
 			}
 		}
 		if strings.HasPrefix(line, "type ") {
 			words := strings.Split(line, " ")
 			if len(words) >= 2 && isExported(words[1]) {
-				lineNumbers[intoLink(strings.Join(words[0:2], " "))] = lineNumber
+				lineNumbers[intoLink(strings.Join(words[0:2], " "))] = lineNumber + 1
 			}
 		}
 	}
