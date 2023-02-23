@@ -22,14 +22,8 @@ import (
 //go:embed template.md
 var Markdown string // value from template.md file
 
-func filter(info fs.FileInfo) bool {
-	if strings.HasSuffix(info.Name(), "_test.go") {
-		return false
-	}
-	if strings.HasSuffix(info.Name(), ".go") {
-		return true
-	}
-	return false
+func isProductionGo(filename string) bool {
+	return strings.HasSuffix(filename, ".go") && !strings.HasSuffix(filename, "_test.go")
 }
 
 func buildImportMap(specs []*ast.ImportSpec) map[string]string {
@@ -132,7 +126,9 @@ func Run(out io.Writer, directory, version string) error {
 	if !fileExists(directory + "/doc.go") {
 		log.Warning("doc.go is missing")
 	}
-	astPackages, err := parser.ParseDir(fset, ".", filter, parser.ParseComments)
+	astPackages, err := parser.ParseDir(fset, directory, func(fi fs.FileInfo) bool {
+		return isProductionGo(fi.Name())
+	}, parser.ParseComments)
 	if err != nil {
 		return err
 	}
@@ -144,7 +140,7 @@ func Run(out io.Writer, directory, version string) error {
 		return err
 	}
 	for _, astPkg := range astPackages {
-		pkg := doc.New(astPkg, ".", 0)
+		pkg := doc.New(astPkg, directory, 0)
 		// log.WithFields(log.Fields{"pkg": fmt.Sprintf("%#v", pkg)}).Info("output from doc.New")
 		// log.WithFields(log.Fields{"pkg.Types": fmt.Sprintf("%#v: %#v", fset.Position(token.Pos(pkg.Types[0].Decl.Tok)), pkg.Types[0])}).Info("output from doc.New")
 		if strings.HasSuffix(modName, "/"+pkg.Name) {
