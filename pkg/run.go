@@ -177,7 +177,7 @@ func Run(out io.Writer, directory, version string) error {
 			return false
 		}
 		for key, value := range scanFile(fname) {
-			lineNumbers[key] = lineNumber{filename: fname, line: value}
+			lineNumbers[key] = lineNumber{filename: fi.Name(), line: value}
 		}
 		return true
 	}, parser.ParseComments)
