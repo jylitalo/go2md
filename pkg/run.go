@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"text/template"
 
@@ -116,6 +117,47 @@ func RunDirTree(out io.Writer, directory, output, version string) error {
 	return nil
 }
 
+type lineNumber struct {
+	filename string
+	line     int
+}
+
+func isExported(pattern string) bool {
+	ok, _ := regexp.Match("^[A-Z]", []byte(pattern))
+	return ok
+}
+
+func scanFile(filename string) map[string]int {
+	content, err := os.ReadFile(filename)
+	if err != nil {
+		log.WithFields(log.Fields{"err": err, "filename": filename}).Error("scanFile")
+		return nil
+	}
+	lineNumbers := map[string]int{}
+	for lineNumber, line := range strings.Split(string(content), "\n") {
+		if strings.HasPrefix(line, "func ") {
+			words := strings.Split(line, " ")
+			if len(words) >= 3 && strings.HasPrefix(words[1], "(") && isExported(words[2]) {
+				words[2] = strings.Split(words[2], "(")[0]
+				key := intoLink(strings.Join(words[0:3], " "))
+				lineNumbers[key] = lineNumber
+			}
+			if len(words) >= 2 && isExported(words[1]) {
+				words[1] = strings.Split(words[1], "(")[0]
+				key := intoLink(strings.Join(words[0:2], " "))
+				lineNumbers[key] = lineNumber
+			}
+		}
+		if strings.HasPrefix(line, "type ") {
+			words := strings.Split(line, " ")
+			if len(words) >= 2 && isExported(words[1]) {
+				lineNumbers[intoLink(strings.Join(words[0:2], " "))] = lineNumber
+			}
+		}
+	}
+	return lineNumbers
+}
+
 // Run reads all "*.go" files (excluding "*_test.go") and writes markdown document out of it.
 func Run(out io.Writer, directory, version string) error {
 	fset := token.NewFileSet()
@@ -124,17 +166,25 @@ func Run(out io.Writer, directory, version string) error {
 		return fmt.Errorf("unable to determine module name")
 	}
 	if !fileExists(directory + "/doc.go") {
-		log.Warning("doc.go is missing")
+		log.Warning("doc.go is missing from " + directory)
 	}
+	lineNumbers := map[string]lineNumber{}
 	astPackages, err := parser.ParseDir(fset, directory, func(fi fs.FileInfo) bool {
-		return isProductionGo(fi.Name())
+		fname := fi.Name()
+		if valid := isProductionGo(fname); !valid {
+			return false
+		}
+		for key, value := range scanFile(fname) {
+			lineNumbers[key] = lineNumber{filename: fname, line: value}
+		}
+		return true
 	}, parser.ParseComments)
 	if err != nil {
 		return err
 	}
 	imports := dirImports(astPackages)
 	imports["main"] = modName
-	tmpl, err := template.New("new").Funcs(templateFuncs(version, imports)).Parse(Markdown)
+	tmpl, err := template.New("new").Funcs(templateFuncs(version, imports, lineNumbers)).Parse(Markdown)
 	if err != nil {
 		log.Error("Error from tmpl.New")
 		return err

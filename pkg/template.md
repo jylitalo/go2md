@@ -70,7 +70,7 @@ This section is empty.
 {{- if .Types }}
 ## Types
 {{-   range $val := .Types }}
-### type {{ $val.Name }}
+### type {{ typeHeading $val.Name }}
 
 <pre>
 {{      typeSection $val }}

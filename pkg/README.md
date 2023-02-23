@@ -29,7 +29,7 @@ Markdown is golang template for go2md output
 
 ## Functions
 
-### func Output
+### func [Output](./run.go#L79)
 
 <pre>
 func Output(out <a href="https://pkg.go.dev/io#Writer">io.Writer</a>, directory, filename string) (<a href="https://pkg.go.dev/io#Writer">io.Writer</a>, func() error, error)
@@ -37,7 +37,7 @@ func Output(out <a href="https://pkg.go.dev/io#Writer">io.Writer</a>, directory,
 Output creates output file if needed and returns writer to it
 
 
-### func Run
+### func [Run](./run.go#L161)
 
 <pre>
 func Run(out <a href="https://pkg.go.dev/io#Writer">io.Writer</a>, directory, version string) error
@@ -45,7 +45,7 @@ func Run(out <a href="https://pkg.go.dev/io#Writer">io.Writer</a>, directory, ve
 Run reads all "*.go" files (excluding "*_test.go") and writes markdown document out of it.
 
 
-### func RunDirTree
+### func [RunDirTree](./run.go#L93)
 
 <pre>
 func RunDirTree(out <a href="https://pkg.go.dev/io#Writer">io.Writer</a>, directory, output, version string) error
