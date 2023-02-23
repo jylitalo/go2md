@@ -1,4 +1,4 @@
-name: test
+name: Test
 on: [push]
 jobs:
   tests:
@@ -25,4 +25,3 @@ jobs:
       run: go build go2md.go
     - name: Run recursive go2md
       run: ./go2md --recursive --output README.md
-
