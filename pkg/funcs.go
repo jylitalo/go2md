@@ -17,13 +17,14 @@ var (
 	exportedType, _ = regexp.Compile("^[A-Z]")
 )
 
-func templateFuncs(version string, imports map[string]string) template.FuncMap {
+func templateFuncs(version string, imports map[string]string, lineNumbers map[string]lineNumber) template.FuncMap {
 	return template.FuncMap{
 		"trim":        strings.TrimSpace,
 		"funcElem":    funcElem,
-		"funcHeading": funcHeading,
+		"funcHeading": funcHeading(lineNumbers),
 		"funcSection": funcSection(imports),
 		"typeElem":    typeElem,
+		"typeHeading": typeHeading(lineNumbers),
 		"typeSection": typeSection(imports),
 		"varElem":     varElem(imports),
 		"version":     func() string { return version },
@@ -152,10 +153,6 @@ func funcReturns(fields *ast.FieldList, imports map[string]string) varTypeOutput
 	}
 }
 
-func funcHeading(funcObj doc.Func) string {
-	return fmt.Sprintf("func %s%s", funcReceiver(funcObj), funcObj.Name)
-}
-
 func funcElem(funcObj doc.Func) string {
 	text := fmt.Sprintf(
 		"func %s%s(%s)%s", funcReceiver(funcObj), funcObj.Name,
@@ -164,6 +161,20 @@ func funcElem(funcObj doc.Func) string {
 	)
 	link := intoLink(fmt.Sprintf("func %s%s", funcReceiver(funcObj), funcObj.Name))
 	return fmt.Sprintf("- [%s](#%s)", text, link)
+}
+
+func funcHeading(lineNumbers map[string]lineNumber) func(doc.Func) string {
+	return func(funcObj doc.Func) string {
+		recv := funcReceiver(funcObj)
+		key := intoLink(fmt.Sprintf("func %s%s", recv, funcObj.Name))
+		if value, ok := lineNumbers[key]; ok {
+			return fmt.Sprintf("func %s[%s](./%s#L%d)", recv, funcObj.Name, value.filename, value.line)
+		}
+		log.WithFields(log.Fields{
+			"key": key, "lineNumbers": fmt.Sprintf("%#v", lineNumbers),
+		}).Error("Failed to find line number in funcHeading")
+		return fmt.Sprintf("func %s%s", recv, funcObj.Name)
+	}
 }
 
 func funcSection(imports map[string]string) func(doc.Func) string {
@@ -206,6 +217,19 @@ func typeElem(typeObj doc.Type) string {
 		fields = "\n" + strings.Join(lines, "\n")
 	}
 	return fmt.Sprintf("- [type %s](#type-%s)%s", typeObj.Name, strings.ToLower(typeObj.Name), fields)
+}
+
+func typeHeading(lineNumbers map[string]lineNumber) func(string) string {
+	return func(name string) string {
+		key := intoLink("type " + name)
+		if value, ok := lineNumbers[key]; ok {
+			return fmt.Sprintf("type [%s](./%s#L%d)", name, value.filename, value.line)
+		}
+		log.WithFields(log.Fields{
+			"key": key, "lineNumbers": fmt.Sprintf("%#v", lineNumbers),
+		}).Error("Failed to find line number in typeHeading")
+		return "type " + name
+	}
 }
 
 func typeSection(imports map[string]string) func(doc.Type) string {
