@@ -1,0 +1,7 @@
+# action.yml
+name: 'go to markdown'
+description: 'Recursively create README.md files from golang files'
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
+
