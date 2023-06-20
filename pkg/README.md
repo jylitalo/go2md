@@ -7,9 +7,10 @@ Imports: 16
 
 ## Index
 - [Variables](variables)
-- [func Output(out io.Writer, directory, filename string) (io.Writer, func() error, error)](#func-output)
-- [func Run(out io.Writer, directory, version string) error](#func-run)
-- [func RunDirTree(out io.Writer, directory, output, version string) error](#func-rundirtree)
+- [func RunDirTree(out OutputSettings, version string, includeMain bool) error](#func-rundirtree)
+- [func RunDirectory(out OutputSettings, version string, includeMain bool) error](#func-rundirectory)
+- [type OutputSettings](#type-outputsettings)
+    - [func (output *OutputSettings) Writer() (io.WriteCloser, error)](#func-output-outputsettings-writer)
 
 ## Examples
 
@@ -29,29 +30,37 @@ Markdown is golang template for go2md output
 
 ## Functions
 
-### func [Output](./run.go#L80)
+### func [RunDirTree](./run.go#L118)
 
 <pre>
-func Output(out <a href="https://pkg.go.dev/io#Writer">io.Writer</a>, directory, filename string) (<a href="https://pkg.go.dev/io#Writer">io.Writer</a>, func() error, error)
-</pre>
-Output creates output file if needed and returns writer to it
-
-
-### func [Run](./run.go#L164)
-
-<pre>
-func Run(out <a href="https://pkg.go.dev/io#Writer">io.Writer</a>, directory, version string) error
-</pre>
-Run reads all "*.go" files (excluding "*_test.go") and writes markdown document out of it.
-
-
-### func [RunDirTree](./run.go#L94)
-
-<pre>
-func RunDirTree(out <a href="https://pkg.go.dev/io#Writer">io.Writer</a>, directory, output, version string) error
+func RunDirTree(out <a href="#type-outputsettings">OutputSettings</a>, version string, includeMain bool) error
 </pre>
 RunDirTree checks given directory and its subdirectories for golang
 
+
+### func [RunDirectory](./run.go#L106)
+
+<pre>
+func RunDirectory(out <a href="#type-outputsettings">OutputSettings</a>, version string, includeMain bool) error
+</pre>
+RunDirectory checks given directory and only that directory
+
+
+## Types
+### type [OutputSettings](./run.go#L21)
+
+<pre>
+type OutputSettings struct {
+    Default <a href="https://pkg.go.dev/io#WriteCloser">io.WriteCloser</a>
+    Directory string
+    Filename string
+}
+</pre>
+### func (output *OutputSettings) [Writer](./run.go#L93)
+<pre>
+func (output *OutputSettings) Writer() (<a href="https://pkg.go.dev/io#WriteCloser">io.WriteCloser</a>, error)
+</pre>
+Output creates output file if needed and returns writer to it
 
 
 --

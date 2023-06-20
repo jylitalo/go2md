@@ -38,6 +38,7 @@ func moduleName(dir string) (string, error) {
 	return "", errors.New("failed to find module name from go.mod")
 }
 
+// getPackageName assumes that each directory has one package name in golang namespace.
 func getPackageName(dir string) (string, error) {
 	cwd, err := filepath.Abs(dir)
 	if err != nil {

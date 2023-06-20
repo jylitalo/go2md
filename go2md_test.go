@@ -40,4 +40,20 @@ func TestMain(t *testing.T) {
 			}
 		}
 	})
+	t.Run("ignore main", func(t *testing.T) {
+		finfo, err := os.Stat("README.md")
+		if err != nil {
+			t.Error(err)
+		}
+		mtime := finfo.ModTime()
+		os.Args = []string{"go2md", "--output=README.md", "--ignore-main"}
+		main()
+		finfo, err = os.Stat("README.md")
+		if err != nil {
+			t.Error(err)
+		}
+		if mtime != finfo.ModTime() {
+			t.Errorf("modTime on README.md was changed (%v vs. %v)", mtime, finfo.ModTime())
+		}
+	})
 }

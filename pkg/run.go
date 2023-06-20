@@ -18,15 +18,25 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+type OutputSettings struct {
+	Default   io.WriteCloser // current default
+	Directory string         // override Out with Directory + Filename
+	Filename  string         // override Out with Directory + Filename
+}
+
 // Markdown is golang template for go2md output
 //
 //go:embed template.md
 var Markdown string // value from template.md file
 
+// isProductionGo ignores all code that is only used for `go test`
 func isProductionGo(filename string) bool {
 	return strings.HasSuffix(filename, ".go") && !strings.HasSuffix(filename, "_test.go")
 }
 
+// buildImportMap creates map from all imports that one directory has.
+// Key is alias to package and value is full path to package.
+// If alias is `_`, we ignore it.
 func buildImportMap(specs []*ast.ImportSpec) map[string]string {
 	mapping := map[string]string{}
 	for _, spec := range specs {
@@ -44,6 +54,9 @@ func buildImportMap(specs []*ast.ImportSpec) map[string]string {
 	return mapping
 }
 
+// dirImports scan through all go files and creates map of import statements.
+// Key is alias to package and value is full path to package.
+// If alias is `_`, we ignore it.
 func dirImports(astPackages map[string]*ast.Package) map[string]string {
 	mapping := map[string]string{}
 	stats := map[string]map[string][]string{}
@@ -77,23 +90,34 @@ func dirImports(astPackages map[string]*ast.Package) map[string]string {
 }
 
 // Output creates output file if needed and returns writer to it
-func Output(out io.Writer, directory, filename string) (io.Writer, func() error, error) {
-	if filename == "" {
-		return out, nil, nil
+func (output *OutputSettings) Writer() (io.WriteCloser, error) {
+	if output.Filename == "" {
+		return output.Default, nil
 	}
-	fname := directory + "/" + filename
+	fname := output.Directory + "/" + output.Filename
 	fout, err := os.Create(fname)
 	if err != nil {
-		log.WithFields(log.Fields{"err": err, "fname": fname}).Fatal("failed to create file")
-		return out, nil, err
+		return output.Default, fmt.Errorf("OutputSettings.Writer failed: %w", err)
 	}
-	return fout, fout.Close, err
+	return fout, err
+}
+
+// RunDirectory checks given directory and only that directory
+func RunDirectory(out OutputSettings, version string, includeMain bool) error {
+	pkgName, err := getPackageName(out.Directory)
+	if err != nil {
+		return fmt.Errorf("failed determine module name: %w", err)
+	}
+	if pkgName == "main" && !includeMain {
+		return nil
+	}
+	return run(out, pkgName, version, includeMain)
 }
 
 // RunDirTree checks given directory and its subdirectories for golang
-func RunDirTree(out io.Writer, directory, output, version string) error {
+func RunDirTree(out OutputSettings, version string, includeMain bool) error {
 	paths := map[string]bool{}
-	err := filepath.WalkDir(directory, func(path string, d fs.DirEntry, err error) error {
+	err := filepath.WalkDir(out.Directory, func(path string, d fs.DirEntry, err error) error {
 		if !d.IsDir() && strings.HasSuffix(path, ".go") {
 			paths[filepath.Dir(path)] = true
 		}
@@ -103,14 +127,7 @@ func RunDirTree(out io.Writer, directory, output, version string) error {
 		return err
 	}
 	for path := range paths {
-		out, close, err := Output(out, path, output)
-		if err != nil {
-			return err
-		}
-		if close != nil {
-			defer close()
-		}
-		if err = Run(out, path, version); err != nil {
+		if err = RunDirectory(OutputSettings{Default: out.Default, Filename: out.Filename, Directory: path}, version, includeMain); err != nil {
 			return err
 		}
 	}
@@ -122,11 +139,15 @@ type lineNumber struct {
 	line     int
 }
 
+// isExported checks if given pattern (typically var, const, type or function name)
+// can be used from other packages.
 func isExported(pattern string) bool {
 	ok, _ := regexp.Match("^[A-Z]", []byte(pattern))
 	return ok
 }
 
+// scanFile goes through given file and builds map that gives line number for every
+// function and type in a file.
 func scanFile(filename string) map[string]int {
 	content, err := os.ReadFile(filename)
 	if err != nil {
@@ -160,13 +181,9 @@ func scanFile(filename string) map[string]int {
 	return lineNumbers
 }
 
-// Run reads all "*.go" files (excluding "*_test.go") and writes markdown document out of it.
-func Run(out io.Writer, directory, version string) error {
+func getPackages(directory, modName string, includeMain bool) ([]doc.Package, map[string]string, map[string]lineNumber, error) {
+	pkgs := []doc.Package{}
 	fset := token.NewFileSet()
-	modName, err := getPackageName(directory)
-	if err != nil {
-		return fmt.Errorf("unable to determine module name")
-	}
 	if !fileExists(directory + "/doc.go") {
 		log.Warning("doc.go is missing from " + directory)
 	}
@@ -182,25 +199,47 @@ func Run(out io.Writer, directory, version string) error {
 		return true
 	}, parser.ParseComments)
 	if err != nil {
-		return err
+		return nil, nil, lineNumbers, err
 	}
 	imports := dirImports(astPackages)
-	imports["main"] = modName
-	tmpl, err := template.New("new").Funcs(templateFuncs(version, imports, lineNumbers)).Parse(Markdown)
-	if err != nil {
-		log.Error("Error from tmpl.New")
-		return err
-	}
 	for _, astPkg := range astPackages {
 		pkg := doc.New(astPkg, directory, 0)
+		if pkg.Name == "main" && includeMain {
+			log.Warningf("Ignoring main package due to --ignore-main")
+			continue
+		}
 		// log.WithFields(log.Fields{"pkg": fmt.Sprintf("%#v", pkg)}).Info("output from doc.New")
 		// log.WithFields(log.Fields{"pkg.Types": fmt.Sprintf("%#v: %#v", fset.Position(token.Pos(pkg.Types[0].Decl.Tok)), pkg.Types[0])}).Info("output from doc.New")
 		if strings.HasSuffix(modName, "/"+pkg.Name) {
 			pkg.Name = modName
 		}
-		if err = tmpl.Execute(out, pkg); err != nil {
-			log.Error("Error from tmpl.Execute")
+		pkgs = append(pkgs, *pkg)
+	}
+	return pkgs, imports, lineNumbers, nil
+}
+
+// Run reads all "*.go" files (excluding "*_test.go") and writes markdown document out of it.
+func run(out OutputSettings, modName, version string, includeMain bool) error {
+	pkgs, imports, lineNumbers, err := getPackages(out.Directory, modName, includeMain)
+	if err != nil {
+		return fmt.Errorf("getPackages failed: %w", err)
+	}
+	imports["main"] = modName
+	tmpl, err := template.New("new").Funcs(templateFuncs(version, imports, lineNumbers)).Parse(Markdown)
+	if err != nil {
+		return fmt.Errorf("tmpl.New failed: %w", err)
+	}
+	for _, pkg := range pkgs {
+		if pkg.Name == "main" && !includeMain {
+			continue
+		}
+		writer, err := out.Writer()
+		if err != nil {
 			return err
+		}
+		defer writer.Close()
+		if err = tmpl.Execute(writer, pkg); err != nil {
+			return fmt.Errorf("tmpl.Execute failed: %w", err)
 		}
 	}
 	return nil
