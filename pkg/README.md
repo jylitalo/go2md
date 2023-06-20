@@ -24,30 +24,31 @@ This section is empty.
 
 <pre>
 var Markdown string // value from template.md file
+var ErrNoPackageFound = errors.New("couldn't find package from ")
 </pre>
-Markdown is golang template for go2md output
-
 
 ## Functions
 
-### func [RunDirTree](./run.go#L115)
+### func [RunDirTree](./run.go#L132)
 
 <pre>
 func RunDirTree(out <a href="#type-outputsettings">OutputSettings</a>, version string, includeMain bool) error
 </pre>
-RunDirTree checks given directory and its subdirectories for golang
+RunDirTree checks given directory and its subdirectories with RunDirectory().
+Ignores all ErrNoPackageFound errors from RunDirectory.
 
 
-### func [RunDirectory](./run.go#L106)
+### func [RunDirectory](./run.go#L122)
 
 <pre>
 func RunDirectory(out <a href="#type-outputsettings">OutputSettings</a>, version string, includeMain bool) error
 </pre>
 RunDirectory checks given directory and only that directory
+Returns ErrNoPackagesFound if includeMain=true and current directory has only main package.
 
 
 ## Types
-### type [OutputSettings](./run.go#L21)
+### type [OutputSettings](./run.go#L22)
 
 <pre>
 type OutputSettings struct {
@@ -56,7 +57,7 @@ type OutputSettings struct {
     Filename string
 }
 </pre>
-### func (output *OutputSettings) [Writer](./run.go#L93)
+### func (output *OutputSettings) [Writer](./run.go#L108)
 <pre>
 func (output *OutputSettings) Writer() (<a href="https://pkg.go.dev/io#WriteCloser">io.WriteCloser</a>, error)
 </pre>

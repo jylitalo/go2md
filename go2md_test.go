@@ -1,23 +1,30 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/jylitalo/go2md/pkg"
 )
 
 // TestRun generates markdown from pkg and compares it against README.md file.
 func TestMain(t *testing.T) {
 	t.Run("validate output", func(t *testing.T) {
+		tmp := "README2.md"
 		readme, err := os.ReadFile("README.md")
 		if err != nil {
 			t.Error("failed to read README.md")
 		}
-		os.Args = []string{"go2md", "--output=README2.md"}
+		os.Args = []string{"go2md", "--output=" + tmp}
+		defer func() {
+			_ = os.Remove(tmp)
+		}()
 		main()
-		readme2, err := os.ReadFile("README2.md")
+		readme2, err := os.ReadFile(tmp)
 		if err != nil {
-			t.Error("failed to read README2.md")
+			t.Error("failed to read " + tmp)
 		}
 		expected := strings.TrimSpace(string(readme))
 		received := strings.TrimSpace(string(readme2))
@@ -40,14 +47,34 @@ func TestMain(t *testing.T) {
 			}
 		}
 	})
-	t.Run("ignore main", func(t *testing.T) {
+	t.Run("--ignore-main without --recursive", func(t *testing.T) {
 		finfo, err := os.Stat("README.md")
 		if err != nil {
 			t.Error(err)
 		}
 		mtime := finfo.ModTime()
 		os.Args = []string{"go2md", "--output=README.md", "--ignore-main"}
-		main()
+		if err = execute(os.Stdout); err == nil && errors.Is(err, pkg.ErrNoPackageFound) {
+			t.Errorf("execute return %v", err)
+		}
+		finfo, err = os.Stat("README.md")
+		if err != nil {
+			t.Error(err)
+		}
+		if mtime != finfo.ModTime() {
+			t.Errorf("modTime on README.md was changed (%v vs. %v)", mtime, finfo.ModTime())
+		}
+	})
+	t.Run("--ignore-main with --recursive", func(t *testing.T) {
+		finfo, err := os.Stat("README.md")
+		if err != nil {
+			t.Error(err)
+		}
+		mtime := finfo.ModTime()
+		os.Args = []string{"go2md", "--output=README.md", "--ignore-main", "--recursive"}
+		if err = execute(os.Stdout); err != nil {
+			t.Errorf("execute return %v", err)
+		}
 		finfo, err = os.Stat("README.md")
 		if err != nil {
 			t.Error(err)

@@ -46,7 +46,7 @@ func TestNewCommand(t *testing.T) {
 		}
 	})
 
-	t.Run("ignore main", func(t *testing.T) {
+	t.Run("ignore main without recursive", func(t *testing.T) {
 		var wc writeCloser
 
 		versionBytes, err := os.ReadFile("../version.txt")
@@ -62,7 +62,34 @@ func TestNewCommand(t *testing.T) {
 		cmd := NewCommand(&wc, version)
 		cmd.SetArgs([]string{"--output=README.md", "--ignore-main"})
 		if err = cmd.Execute(); err != nil {
-			t.Error("Run() returned err: " + err.Error())
+			t.Errorf("Run() returned err: %v", err)
+		}
+		finfo, err = os.Stat("README.md")
+		if err != nil {
+			t.Error(err)
+		}
+		if mtime == finfo.ModTime() {
+			t.Errorf("modTime on README.md should have changed (%v vs. %v)", mtime, finfo.ModTime())
+		}
+	})
+
+	t.Run("ignore main with recursive", func(t *testing.T) {
+		var wc writeCloser
+
+		versionBytes, err := os.ReadFile("../version.txt")
+		if err != nil {
+			t.Error("failed to read version file")
+		}
+		version := strings.TrimSpace(string(versionBytes))
+		finfo, err := os.Stat("README.md")
+		if err != nil {
+			t.Error(err)
+		}
+		mtime := finfo.ModTime()
+		cmd := NewCommand(&wc, version)
+		cmd.SetArgs([]string{"--output=README.md", "--ignore-main", "--recursive"})
+		if err = cmd.Execute(); err != nil {
+			t.Errorf("Run() returned err: %v", err)
 		}
 		finfo, err = os.Stat("README.md")
 		if err != nil {
