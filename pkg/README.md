@@ -30,7 +30,7 @@ Markdown is golang template for go2md output
 
 ## Functions
 
-### func [RunDirTree](./run.go#L118)
+### func [RunDirTree](./run.go#L115)
 
 <pre>
 func RunDirTree(out <a href="#type-outputsettings">OutputSettings</a>, version string, includeMain bool) error

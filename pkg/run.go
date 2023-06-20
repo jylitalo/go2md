@@ -108,9 +108,6 @@ func RunDirectory(out OutputSettings, version string, includeMain bool) error {
 	if err != nil {
 		return fmt.Errorf("failed determine module name: %w", err)
 	}
-	if pkgName == "main" && !includeMain {
-		return nil
-	}
 	return run(out, pkgName, version, includeMain)
 }
 
@@ -204,7 +201,7 @@ func getPackages(directory, modName string, includeMain bool) ([]doc.Package, ma
 	imports := dirImports(astPackages)
 	for _, astPkg := range astPackages {
 		pkg := doc.New(astPkg, directory, 0)
-		if pkg.Name == "main" && includeMain {
+		if pkg.Name == "main" && !includeMain {
 			log.Warningf("Ignoring main package due to --ignore-main")
 			continue
 		}
