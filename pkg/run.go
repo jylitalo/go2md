@@ -40,8 +40,9 @@ var (
 	// Markdown is golang template for go2md output
 	//
 	//go:embed template.md
-	Markdown          string // value from template.md file
-	ErrNoPackageFound = errors.New("couldn't find package from ")
+	Markdown             string // value from template.md file
+	ErrManyPackagesInDir = errors.New("can only handle one package per directory")
+	ErrNoPackageFound    = errors.New("couldn't find package from ")
 )
 
 // isProductionGo ignores all code that is only used for `go test`
@@ -57,11 +58,11 @@ func getImportsFromFile(specs []*ast.ImportSpec) map[string]string {
 	for _, spec := range specs {
 		path := strings.Trim(spec.Path.Value, ("\""))
 		switch {
-		case spec.Name == nil:
+		case spec.Name == nil: // import "github.com/..."
 			fields := strings.Split(path, "/")
 			imported[fields[len(fields)-1]] = path
-		case spec.Name.Name == "_": // ignore
-		default:
+		case spec.Name.Name == "_": // ignore import _ "github.com/..."
+		default: // import alias "github.com/..."
 			imported[spec.Name.Name] = path
 		}
 	}
@@ -120,7 +121,7 @@ func (output *OutputSettings) Writer() (io.WriteCloser, error) {
 func RunDirectory(out OutputSettings, version string, includeMain bool) error {
 	pkgName, err := getPackageName(out.Directory)
 	if err != nil {
-		return fmt.Errorf("failed determine module name: %w", err)
+		return err
 	}
 	return run(out, pkgName, version, includeMain)
 }
@@ -245,7 +246,7 @@ func getPackage(directory, modName string, includeMain bool) (*packageInfo, erro
 	for _, pkg := range pkgs {
 		names = append(names, pkg.Name)
 	}
-	return nil, fmt.Errorf("can only handle one package per directory (found: %s)", strings.Join(names, ", "))
+	return nil, fmt.Errorf("%w (found: %s)", ErrManyPackagesInDir, strings.Join(names, ", "))
 }
 
 // Run reads all "*.go" files (excluding "*_test.go") and writes markdown document out of it.

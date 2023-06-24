@@ -23,13 +23,18 @@ This section is empty.
 ## Variables
 
 <pre>
+var ErrModuleNameMissing = errors.New("failed to find module name")
+var ErrGoModMissing = errors.New("unable to find go.mod")
+</pre>
+<pre>
 var Markdown string // value from template.md file
+var ErrManyPackagesInDir = errors.New("can only handle one package per directory")
 var ErrNoPackageFound = errors.New("couldn't find package from ")
 </pre>
 
 ## Functions
 
-### func [RunDirTree](./run.go#L132)
+### func [RunDirTree](./run.go#L131)
 
 <pre>
 func RunDirTree(out <a href="#type-outputsettings">OutputSettings</a>, version string, includeMain bool) error
@@ -38,7 +43,7 @@ RunDirTree checks given directory and its subdirectories with RunDirectory().
 Ignores all ErrNoPackageFound errors from RunDirectory.
 
 
-### func [RunDirectory](./run.go#L122)
+### func [RunDirectory](./run.go#L121)
 
 <pre>
 func RunDirectory(out <a href="#type-outputsettings">OutputSettings</a>, version string, includeMain bool) error
@@ -57,7 +62,7 @@ type OutputSettings struct {
     Filename string
 }
 </pre>
-### func (output *OutputSettings) [Writer](./run.go#L108)
+### func (output *OutputSettings) [Writer](./run.go#L107)
 <pre>
 func (output *OutputSettings) Writer() (<a href="https://pkg.go.dev/io#WriteCloser">io.WriteCloser</a>, error)
 </pre>

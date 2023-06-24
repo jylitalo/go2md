@@ -3,11 +3,17 @@ package pkg
 import (
 	"bufio"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
+)
+
+var (
+	ErrModuleNameMissing = errors.New("failed to find module name")
+	ErrGoModMissing      = errors.New("unable to find go.mod")
 )
 
 func hasGoMod(dir string) bool {
@@ -19,8 +25,9 @@ func hasGoMod(dir string) bool {
 func moduleName(dir string) (string, error) {
 	f, err := os.Open(dir + "/go.mod")
 	if err != nil {
-		log.WithFields(log.Fields{"dir": dir, "err": err}).Error("Failed to open go.mod")
-		return "", errors.New("failed to open go.mod")
+		err = fmt.Errorf("moduleName failed: %w", err)
+		log.WithFields(log.Fields{"dir": dir}).Error(err)
+		return "", err
 	}
 	defer f.Close()
 	scan := bufio.NewScanner(f)
@@ -35,28 +42,29 @@ func moduleName(dir string) (string, error) {
 			log.WithFields(log.Fields{"line": line}).Error("module name missing from line")
 		}
 	}
-	return "", errors.New("failed to find module name from go.mod")
+	return "", fmt.Errorf("%w from %s/go.mod", ErrModuleNameMissing, dir)
 }
 
 // getPackageName assumes that each directory has one package name in golang namespace.
 func getPackageName(dir string) (string, error) {
 	cwd, err := filepath.Abs(dir)
 	if err != nil {
-		return "", errors.New("unable to determine absolute path")
+		return "", fmt.Errorf("getPackageName failed: %w", err)
 	}
 	dirs := strings.Split(cwd, "/")
-	for join := len(dirs); join > 0; join-- {
-		current := strings.Join(dirs[0:join], "/")
-		if hasGoMod(current) {
-			mod, err := moduleName(current)
-			if err != nil {
-				return "", err
-			}
-			parts := append([]string{mod}, dirs[join:]...)
-			return strings.Join(parts, "/"), nil
+	for idx := len(dirs); idx > 0; idx-- {
+		root := strings.Join(dirs[0:idx], "/")
+		if !hasGoMod(root) {
+			continue
 		}
+		modName, err := moduleName(root)
+		if err != nil {
+			return "", err
+		}
+		parts := append([]string{modName}, dirs[idx:]...)
+		return strings.Join(parts, "/"), nil
 	}
-	return "", errors.New("unable to find go.mod with module name")
+	return "", fmt.Errorf("%w from %s or its parent dirs", ErrGoModMissing, cwd)
 }
 
 func fileExists(fname string) bool {
