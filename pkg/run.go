@@ -49,45 +49,43 @@ func isProductionGo(filename string) bool {
 	return strings.HasSuffix(filename, ".go") && !strings.HasSuffix(filename, "_test.go")
 }
 
-// buildImportMap creates map from all imports that one directory has.
+// getImportsFromFile creates map from ast.ImportSpec (=one golang file).
 // Key is alias to package and value is full path to package.
 // If alias is `_`, we ignore it.
-func buildImportMap(specs []*ast.ImportSpec) map[string]string {
-	mapping := map[string]string{}
+func getImportsFromFile(specs []*ast.ImportSpec) map[string]string {
+	imported := map[string]string{}
 	for _, spec := range specs {
 		path := strings.Trim(spec.Path.Value, ("\""))
 		switch {
 		case spec.Name == nil:
 			fields := strings.Split(path, "/")
-			mapping[fields[len(fields)-1]] = path
-		case spec.Name.Name == "_":
-			continue
+			imported[fields[len(fields)-1]] = path
+		case spec.Name.Name == "_": // ignore
 		default:
-			mapping[spec.Name.Name] = path
+			imported[spec.Name.Name] = path
 		}
 	}
-	return mapping
+	return imported
 }
 
-// dirImports scan through all ast.Packages and creates map of import statements.
+// getImports scan through all ast.Packages and creates map of import statements.
 // Key is alias to package and value is full path to package.
 // If alias is `_`, we ignore it.
-func dirImports(astPackages map[string]*ast.Package) map[string]string {
+func getImports(astPackages map[string]*ast.Package) map[string]string {
 	mapping := map[string]string{}
+	// stats["pkg"]["github.com/foo/bar"] = []string{"foo.go", "bar.go"}
 	stats := map[string]map[string][]string{}
 	for _, astPkg := range astPackages {
 		for fname, f := range astPkg.Files {
-			for alias, fq := range buildImportMap(f.Imports) {
-				mapping[alias] = fq
-				if _, ok := stats[alias]; ok {
-					if _, ok := stats[alias][fq]; ok {
-						stats[alias][fq] = append(stats[alias][fq], fname)
-						continue
-					}
-					stats[alias][fq] = []string{fname}
-					continue
+			for alias, fullName := range getImportsFromFile(f.Imports) {
+				mapping[alias] = fullName
+				if _, ok := stats[alias]; !ok {
+					stats[alias] = map[string][]string{}
 				}
-				stats[alias] = map[string][]string{fq: {fname}}
+				if _, ok := stats[alias][fullName]; !ok {
+					stats[alias][fullName] = []string{}
+				}
+				stats[alias][fullName] = append(stats[alias][fullName], fname)
 			}
 		}
 	}
@@ -95,11 +93,11 @@ func dirImports(astPackages map[string]*ast.Package) map[string]string {
 		if len(stats[alias]) == 1 {
 			continue
 		}
-		files := []string{}
-		for fq, fname := range stats[alias] {
-			files = append(files, fmt.Sprintf("%s in %s", fq, strings.Join(fname, ", ")))
+		duplicates := []string{}
+		for fullName, fname := range stats[alias] {
+			duplicates = append(duplicates, fmt.Sprintf("%s in %s", fullName, strings.Join(fname, ", ")))
 		}
-		log.Warningf("%s has been imported as \n- %s", alias, strings.Join(files, "\n- "))
+		log.Warningf("%s has been imported as \n- %s", alias, strings.Join(duplicates, "\n- "))
 	}
 	return mapping
 }
@@ -160,9 +158,9 @@ func isExported(pattern string) bool {
 	return ok
 }
 
-// scanFile goes through given file and builds map that gives line number for every
+// getLineNumbers goes through given file and builds map that gives line number for every
 // function and type in a file.
-func scanFile(filename string) map[string]int {
+func getLineNumbers(filename string) map[string]int {
 	content, err := os.ReadFile(filename)
 	if err != nil {
 		log.WithFields(log.Fields{"err": err, "filename": filename}).Error("scanFile")
@@ -203,9 +201,7 @@ func scanFile(filename string) map[string]int {
 // multiple packages would overwrite each others output.
 // If includeMain is false and directory has main package, it returns ErrNoPackageFound
 func getPackage(directory, modName string, includeMain bool) (*packageInfo, error) {
-	retValue := &packageInfo{
-		lineNumbers: map[string]lineNumber{},
-	}
+	pkgInfo := &packageInfo{lineNumbers: map[string]lineNumber{}}
 	pkgs := []doc.Package{}
 	fset := token.NewFileSet()
 	if !fileExists(directory + "/doc.go") {
@@ -216,15 +212,15 @@ func getPackage(directory, modName string, includeMain bool) (*packageInfo, erro
 		if valid := isProductionGo(fname); !valid {
 			return false
 		}
-		for key, value := range scanFile(fname) {
-			retValue.lineNumbers[key] = lineNumber{filename: fi.Name(), line: value}
+		for key, value := range getLineNumbers(fname) {
+			pkgInfo.lineNumbers[key] = lineNumber{filename: fi.Name(), line: value}
 		}
 		return true
 	}, parser.ParseComments)
 	if err != nil {
 		return nil, err
 	}
-	retValue.imports = dirImports(astPackages)
+	pkgInfo.imports = getImports(astPackages)
 	for _, astPkg := range astPackages {
 		pkg := doc.New(astPkg, directory, 0)
 		if pkg.Name == "main" && !includeMain {
@@ -242,8 +238,8 @@ func getPackage(directory, modName string, includeMain bool) (*packageInfo, erro
 	case 0:
 		return nil, fmt.Errorf("%w %s", ErrNoPackageFound, directory)
 	case 1:
-		retValue.pkg = pkgs[0]
-		return retValue, nil
+		pkgInfo.pkg = pkgs[0]
+		return pkgInfo, nil
 	}
 	names := []string{}
 	for _, pkg := range pkgs {
