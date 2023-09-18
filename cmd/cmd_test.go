@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 type writeCloser struct {
@@ -76,6 +77,7 @@ func TestNewCommand(t *testing.T) {
 	t.Run("ignore main with recursive", func(t *testing.T) {
 		var wc writeCloser
 
+		time.Sleep(time.Second)
 		versionBytes, err := os.ReadFile("../version.txt")
 		if err != nil {
 			t.Error("failed to read version file")
