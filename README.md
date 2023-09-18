@@ -18,7 +18,7 @@ Main target audience is private golang projects or anyone, who wants to keep doc
 
 `go build go2md.go` will produce you go2md binary.
 
-Imports: 4
+Imports: 5
 
 ## Index
 - [Variables](variables)
