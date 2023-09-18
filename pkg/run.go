@@ -109,7 +109,7 @@ func (output *OutputSettings) Writer() (io.WriteCloser, error) {
 		return output.Default, nil
 	}
 	fname := output.Directory + "/" + output.Filename
-	fout, err := os.Create(fname)
+	fout, err := os.Create(filepath.Clean(fname))
 	if err != nil {
 		return output.Default, fmt.Errorf("OutputSettings.Writer failed: %w", err)
 	}
@@ -162,7 +162,7 @@ func isExported(pattern string) bool {
 // getLineNumbers goes through given file and builds map that gives line number for every
 // function and type in a file.
 func getLineNumbers(filename string) map[string]int {
-	content, err := os.ReadFile(filename)
+	content, err := os.ReadFile(filepath.Clean(filename))
 	if err != nil {
 		log.WithFields(log.Fields{"err": err, "filename": filename}).Error("scanFile")
 		return nil

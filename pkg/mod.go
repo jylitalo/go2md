@@ -23,7 +23,7 @@ func hasGoMod(dir string) bool {
 }
 
 func moduleName(dir string) (string, error) {
-	f, err := os.Open(dir + "/go.mod")
+	f, err := os.Open(filepath.Clean(dir + "/go.mod"))
 	if err != nil {
 		err = fmt.Errorf("moduleName failed: %w", err)
 		log.WithFields(log.Fields{"dir": dir}).Error(err)

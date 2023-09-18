@@ -17,7 +17,7 @@ func NewCommand(writer io.WriteCloser, version string) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// parse flags
 			if flag, _ := cmd.Flags().GetBool("version"); flag {
-				writer.Write([]byte(fmt.Sprintf("go2md %s\n", version)))
+				_, _ = writer.Write([]byte(fmt.Sprintf("go2md %s\n", version)))
 				return nil
 			}
 			dir, _ := cmd.Flags().GetString("directory")
