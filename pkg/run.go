@@ -10,13 +10,12 @@ import (
 	"go/token"
 	"io"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"text/template"
-
-	log "github.com/sirupsen/logrus"
 )
 
 type OutputSettings struct {
@@ -98,7 +97,7 @@ func getImports(astPackages map[string]*ast.Package) map[string]string {
 		for fullName, fname := range stats[alias] {
 			duplicates = append(duplicates, fmt.Sprintf("%s in %s", fullName, strings.Join(fname, ", ")))
 		}
-		log.Warningf("%s has been imported as \n- %s", alias, strings.Join(duplicates, "\n- "))
+		slog.Warn(fmt.Sprintf("%s has been imported as \n- %s", alias, strings.Join(duplicates, "\n- ")))
 	}
 	return mapping
 }
@@ -143,7 +142,7 @@ func RunDirTree(out OutputSettings, version string, includeMain bool) error {
 		out.Directory = path
 		if err = RunDirectory(out, version, includeMain); err != nil {
 			if errors.Is(err, ErrNoPackageFound) {
-				log.Warning("failed to find package from " + path)
+				slog.Warn("failed to find package from " + path)
 				continue
 			}
 			return err
@@ -164,7 +163,7 @@ func isExported(pattern string) bool {
 func getLineNumbers(filename string) map[string]int {
 	content, err := os.ReadFile(filepath.Clean(filename))
 	if err != nil {
-		log.WithFields(log.Fields{"err": err, "filename": filename}).Error("scanFile")
+		slog.Error("scanFile", "err", err, "filename", filename)
 		return nil
 	}
 	lineNumbers := map[string]int{}
@@ -206,7 +205,7 @@ func getPackage(directory, modName string, includeMain bool) (*packageInfo, erro
 	pkgs := []doc.Package{}
 	fset := token.NewFileSet()
 	if !fileExists(directory + "/doc.go") {
-		log.Warning("doc.go is missing from " + directory)
+		slog.Warn("doc.go is missing from " + directory)
 	}
 	astPackages, err := parser.ParseDir(fset, directory, func(fi fs.FileInfo) bool {
 		fname := directory + "/" + fi.Name()
@@ -225,7 +224,7 @@ func getPackage(directory, modName string, includeMain bool) (*packageInfo, erro
 	for _, astPkg := range astPackages {
 		pkg := doc.New(astPkg, directory, 0)
 		if pkg.Name == "main" && !includeMain {
-			log.Warningf("Ignoring main package due to --ignore-main")
+			slog.Warn("Ignoring main package due to --ignore-main")
 			continue
 		}
 		// log.WithFields(log.Fields{"pkg": fmt.Sprintf("%#v", pkg)}).Info("output from doc.New")

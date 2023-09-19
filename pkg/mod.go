@@ -4,11 +4,10 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
-
-	log "github.com/sirupsen/logrus"
 )
 
 var (
@@ -17,7 +16,6 @@ var (
 )
 
 func hasGoMod(dir string) bool {
-	// log.Info("Checking " + dir)
 	_, err := os.Stat(dir + "/go.mod")
 	return !os.IsNotExist(err)
 }
@@ -26,7 +24,7 @@ func moduleName(dir string) (string, error) {
 	f, err := os.Open(filepath.Clean(dir + "/go.mod"))
 	if err != nil {
 		err = fmt.Errorf("moduleName failed: %w", err)
-		log.WithFields(log.Fields{"dir": dir}).Error(err)
+		slog.Error(err.Error(), "dir", dir)
 		return "", err
 	}
 	defer f.Close()
@@ -39,7 +37,7 @@ func moduleName(dir string) (string, error) {
 			if len(words) > 1 {
 				return words[1], nil
 			}
-			log.WithFields(log.Fields{"line": line}).Error("module name missing from line")
+			slog.Error("module name missing from line", "line", line)
 		}
 	}
 	return "", fmt.Errorf("%w from %s/go.mod", ErrModuleNameMissing, dir)

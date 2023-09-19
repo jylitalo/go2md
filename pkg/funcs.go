@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"go/ast"
 	"go/doc"
+	"log/slog"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"text/template"
-
-	log "github.com/sirupsen/logrus"
 )
 
 var (
@@ -52,7 +52,7 @@ func intoImportLink(text string, imports map[string]string) string {
 		if exportedType.MatchString(text) {
 			return fmt.Sprintf(`<a href="#%s">%s</a>`, intoLink("type "+text), text)
 		}
-		log.Warningf("Internal type: %s", text)
+		slog.Warn(fmt.Sprintf("Internal type: %s", text))
 		return text
 	}
 	fields := strings.SplitN(text, ".", 2)
@@ -63,7 +63,11 @@ func intoImportLink(text string, imports map[string]string) string {
 			if strings.Join(modFields[0:3], "/") == mainPath {
 				relPath, err := filepath.Rel(imports["main"], modPath)
 				if err != nil {
-					log.WithFields(log.Fields{"imports['main']": imports["main"], "modPath": modPath}).Fatal("Unable to establish relative path")
+					slog.Error(
+						"Unable to establish relative path",
+						"imports['main']", imports["main"], "modPath", modPath,
+					)
+					os.Exit(1)
 				}
 				return fmt.Sprintf(`<a href="%s/README.md#%s">%s</a>`, relPath, intoLink("type "+fields[1]), text)
 			}
@@ -170,9 +174,10 @@ func funcHeading(lineNumbers map[string]lineNumber) func(doc.Func) string {
 		if value, ok := lineNumbers[key]; ok {
 			return fmt.Sprintf("func %s[%s](./%s#L%d)", recv, funcObj.Name, value.filename, value.line)
 		}
-		log.WithFields(log.Fields{
-			"key": key, "lineNumbers": fmt.Sprintf("%#v", lineNumbers),
-		}).Error("Failed to find line number in funcHeading")
+		slog.Error(
+			"Failed to find line number in funcHeading",
+			"key", key, "lineNumbers", fmt.Sprintf("%#v", lineNumbers),
+		)
 		return fmt.Sprintf("func %s%s", recv, funcObj.Name)
 	}
 }
@@ -207,9 +212,11 @@ func typeElem(typeObj doc.Type) string {
 				lines = append(lines, "    "+funcElem(*funcObj))
 			}
 		default:
-			log.WithFields(log.Fields{
-				"spec.(*ast.TypeSpec).Type": fmt.Sprintf("%#v", spec.(*ast.TypeSpec).Type)},
-			).Fatalf("unknown parameter type %#v", t)
+			slog.Error(
+				fmt.Sprintf("unknown parameter type %#v", t),
+				"spec.(*ast.TypeSpec).Type", fmt.Sprintf("%#v", spec.(*ast.TypeSpec).Type),
+			)
+			os.Exit(1)
 		}
 	}
 	fields := ""
@@ -225,9 +232,10 @@ func typeHeading(lineNumbers map[string]lineNumber) func(string) string {
 		if value, ok := lineNumbers[key]; ok {
 			return fmt.Sprintf("type [%s](./%s#L%d)", name, value.filename, value.line)
 		}
-		log.WithFields(log.Fields{
-			"key": key, "lineNumbers": fmt.Sprintf("%#v", lineNumbers),
-		}).Error("Failed to find line number in typeHeading")
+		slog.Error(
+			"Failed to find line number in typeHeading",
+			"key", key, "lineNumbers", fmt.Sprintf("%#v", lineNumbers),
+		)
 		return "type " + name
 	}
 }
@@ -279,9 +287,11 @@ func typeSection(imports map[string]string) func(doc.Type) string {
 					lines = append(lines, "")
 				}
 			default:
-				log.WithFields(log.Fields{
-					"spec.(*ast.TypeSpec).Type": fmt.Sprintf("%#v", spec.(*ast.TypeSpec).Type)},
-				).Fatalf("unknown parameter type %#v", t)
+				slog.Error(
+					fmt.Sprintf("unknown parameter type %#v", t),
+					"spec.(*ast.TypeSpec).Type", fmt.Sprintf("%#v", spec.(*ast.TypeSpec).Type),
+				)
+				os.Exit(1)
 			}
 		}
 		fields := ""

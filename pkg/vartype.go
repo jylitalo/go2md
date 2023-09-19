@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
+	"log/slog"
+	"os"
 	"strings"
-
-	log "github.com/sirupsen/logrus"
 )
 
 type varTypeOutput struct {
@@ -81,7 +81,8 @@ func variableType(variable ast.Expr, depth int, hyphen bool, imports map[string]
 		case token.STRING:
 			return sprintf("string")
 		default:
-			log.WithField("t.Kind", t.Kind).Panic("unknown token kind")
+			slog.Error("unknown token kind", "t.Kind", t.Kind)
+			os.Exit(1)
 		}
 	case *ast.CallExpr:
 		funcName := variableType(t.Fun, depth, hyphen, imports).plainText
@@ -105,7 +106,8 @@ func variableType(variable ast.Expr, depth int, hyphen bool, imports map[string]
 		case nil:
 			return join(varTypes, ",\n")
 		default:
-			log.Panicf("Unknown CompositeLit: %#v", subType)
+			slog.Error(fmt.Sprintf("Unknown CompositeLit: %#v", subType))
+			os.Exit(1)
 		}
 	case *ast.Ellipsis:
 		return sprintf("...%s", variableType(t.Elt, depth, hyphen, imports))
@@ -124,7 +126,7 @@ func variableType(variable ast.Expr, depth int, hyphen bool, imports map[string]
 				markdown:  fmt.Sprintf(`<a href="#%s">%s</a>`, intoLink("type "+t.Name), t.Name),
 			}
 		}
-		log.Warningf("Internal type: %s", t.Name)
+		slog.Warn("Internal type: " + t.Name)
 		return sprintf(t.Name)
 	case *ast.InterfaceType:
 		return sprintf("interface{}")
@@ -167,13 +169,12 @@ func variableType(variable ast.Expr, depth int, hyphen bool, imports map[string]
 			vto := variableType(t.X, depth, hyphen, imports)
 			return vto.prefix("&")
 		default:
-			log.Panicf("unknown unary type %d for %s", t.Op, t.X)
+			slog.Error(fmt.Sprintf("unknown unary type %d for %s", t.Op, t.X))
+			os.Exit(1)
 		}
 	default:
-		log.WithFields(log.Fields{
-			"variable.(type)": fmt.Sprintf("%#v", variable)},
-		).Panicf("unknown variable type")
+		slog.Error("unknown variable type", "variable.(type)", fmt.Sprintf("%#v", variable))
+		os.Exit(1)
 	}
-	log.WithField("variableType", fmt.Sprintf("%#v", variable))
 	return varTypeOutput{}
 }
