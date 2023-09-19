@@ -34,7 +34,9 @@ func NewCommand(writer io.WriteCloser, version string) *cobra.Command {
 	}
 	cmd.Flags().StringP("directory", "d", ".", "root directory")
 	cmd.Flags().StringP("output", "o", "", "write output to file")
+	cmd.Flags().Bool("debug", false, "debug level logging")
 	cmd.Flags().Bool("ignore-main", false, "ignore directory, if its main package")
+	cmd.Flags().Bool("no-color", false, "don't use ANSI colors in logging")
 	cmd.Flags().BoolP("recursive", "r", false, "go directories recursively")
 	cmd.Flags().BoolP("version", "v", false, "print go2md version")
 	return cmd
