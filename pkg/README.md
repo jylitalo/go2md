@@ -34,7 +34,7 @@ var ErrNoPackageFound = errors.New("couldn't find package from ")
 
 ## Functions
 
-### func [RunDirTree](./run.go#L131)
+### func [RunDirTree](./run.go#L130)
 
 <pre>
 func RunDirTree(out <a href="#type-outputsettings">OutputSettings</a>, version string, includeMain bool) error
@@ -43,7 +43,7 @@ RunDirTree checks given directory and its subdirectories with RunDirectory().
 Ignores all ErrNoPackageFound errors from RunDirectory.
 
 
-### func [RunDirectory](./run.go#L121)
+### func [RunDirectory](./run.go#L120)
 
 <pre>
 func RunDirectory(out <a href="#type-outputsettings">OutputSettings</a>, version string, includeMain bool) error
@@ -53,7 +53,7 @@ Returns ErrNoPackagesFound if includeMain=true and current directory has only ma
 
 
 ## Types
-### type [OutputSettings](./run.go#L22)
+### type [OutputSettings](./run.go#L21)
 
 <pre>
 type OutputSettings struct {
@@ -62,7 +62,7 @@ type OutputSettings struct {
     Filename string
 }
 </pre>
-### func (output *OutputSettings) [Writer](./run.go#L107)
+### func (output *OutputSettings) [Writer](./run.go#L106)
 <pre>
 func (output *OutputSettings) Writer() (<a href="https://pkg.go.dev/io#WriteCloser">io.WriteCloser</a>, error)
 </pre>
