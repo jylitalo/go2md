@@ -20,8 +20,8 @@ import (
 
 type OutputSettings struct {
 	Default   io.WriteCloser // current default
-	Directory string         // override Out with Directory + Filename
-	Filename  string         // override Out with Directory + Filename
+	Directory string         // override Default with Directory + Filename
+	Filename  string         // override Default with Directory + Filename
 }
 
 type lineNumber struct {
@@ -275,7 +275,11 @@ func run(out OutputSettings, modName, version string, includeMain bool) (err err
 	if err != nil {
 		return
 	}
-	defer writer.Close()
+	defer func() {
+		if out.Filename != "" {
+			_ = writer.Close()
+		}
+	}()
 	if err = tmpl.Execute(writer, pkgInfo.pkg); err != nil {
 		err = fmt.Errorf("tmpl.Execute failed: %w", err)
 		return
