@@ -5,7 +5,6 @@ import (
 	"go/ast"
 	"go/token"
 	"log/slog"
-	"os"
 	"strings"
 )
 
@@ -81,8 +80,7 @@ func variableType(variable ast.Expr, depth int, hyphen bool, imports map[string]
 		case token.STRING:
 			return sprintf("string")
 		default:
-			slog.Error("unknown token kind", "t.Kind", t.Kind)
-			os.Exit(1)
+			panic(fmt.Errorf("unknown token kind t.Kind=%#v", t.Kind))
 		}
 	case *ast.CallExpr:
 		funcName := variableType(t.Fun, depth, hyphen, imports).plainText
@@ -106,8 +104,7 @@ func variableType(variable ast.Expr, depth int, hyphen bool, imports map[string]
 		case nil:
 			return join(varTypes, ",\n")
 		default:
-			slog.Error(fmt.Sprintf("Unknown CompositeLit: %#v", subType))
-			os.Exit(1)
+			panic(fmt.Errorf("Unknown CompositeLit: %#v", subType))
 		}
 	case *ast.Ellipsis:
 		return sprintf("...%s", variableType(t.Elt, depth, hyphen, imports))
@@ -169,12 +166,9 @@ func variableType(variable ast.Expr, depth int, hyphen bool, imports map[string]
 			vto := variableType(t.X, depth, hyphen, imports)
 			return vto.prefix("&")
 		default:
-			slog.Error(fmt.Sprintf("unknown unary type %d for %s", t.Op, t.X))
-			os.Exit(1)
+			panic(fmt.Errorf("unknown unary type %d for %s", t.Op, t.X))
 		}
 	default:
-		slog.Error("unknown variable type", "variable.(type)", fmt.Sprintf("%#v", variable))
-		os.Exit(1)
+		panic(fmt.Errorf("unknown variable type variable.(type)=%#v", variable))
 	}
-	return varTypeOutput{}
 }

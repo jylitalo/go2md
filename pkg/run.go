@@ -249,26 +249,36 @@ func getPackage(directory, modName string, includeMain bool) (*packageInfo, erro
 }
 
 // Run reads all "*.go" files (excluding "*_test.go") and writes markdown document out of it.
-func run(out OutputSettings, modName, version string, includeMain bool) error {
-	pkgInfo, err := getPackage(out.Directory, modName, includeMain)
-	if err != nil {
-		return fmt.Errorf("getPackages failed: %w", err)
+func run(out OutputSettings, modName, version string, includeMain bool) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("%v", r)
+		}
+	}()
+	var pkgInfo *packageInfo
+	if pkgInfo, err = getPackage(out.Directory, modName, includeMain); err != nil {
+		err = fmt.Errorf("getPackages failed: %w", err)
+		return
 	}
 	pkgInfo.imports["main"] = modName
-	tmpl, err := template.New("new").Funcs(templateFuncs(version, pkgInfo.imports, pkgInfo.lineNumbers)).Parse(Markdown)
+	funcs := templateFuncs(version, pkgInfo.imports, pkgInfo.lineNumbers)
+	tmpl, err := template.New("new").Funcs(funcs).Parse(Markdown)
 	if err != nil {
-		return fmt.Errorf("tmpl.New failed: %w", err)
+		err = fmt.Errorf("tmpl.New failed: %w", err)
+		return
 	}
 	if pkgInfo.pkg.Name == "main" && !includeMain {
-		return nil
+		err = nil
+		return
 	}
 	writer, err := out.Writer()
 	if err != nil {
-		return err
+		return
 	}
 	defer writer.Close()
 	if err = tmpl.Execute(writer, pkgInfo.pkg); err != nil {
-		return fmt.Errorf("tmpl.Execute failed: %w", err)
+		err = fmt.Errorf("tmpl.Execute failed: %w", err)
+		return
 	}
 	return nil
 }

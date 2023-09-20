@@ -5,7 +5,6 @@ import (
 	"go/ast"
 	"go/doc"
 	"log/slog"
-	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -63,11 +62,10 @@ func intoImportLink(text string, imports map[string]string) string {
 			if strings.Join(modFields[0:3], "/") == mainPath {
 				relPath, err := filepath.Rel(imports["main"], modPath)
 				if err != nil {
-					slog.Error(
-						"Unable to establish relative path",
-						"imports['main']", imports["main"], "modPath", modPath,
-					)
-					os.Exit(1)
+					panic(fmt.Errorf(
+						"Unable to establish relative path imports['main']=%#v, modPath=%s",
+						imports["main"], modPath,
+					))
 				}
 				return fmt.Sprintf(`<a href="%s/README.md#%s">%s</a>`, relPath, intoLink("type "+fields[1]), text)
 			}
@@ -212,11 +210,10 @@ func typeElem(typeObj doc.Type) string {
 				lines = append(lines, "    "+funcElem(*funcObj))
 			}
 		default:
-			slog.Error(
-				fmt.Sprintf("unknown parameter type %#v", t),
-				"spec.(*ast.TypeSpec).Type", fmt.Sprintf("%#v", spec.(*ast.TypeSpec).Type),
-			)
-			os.Exit(1)
+			panic(fmt.Errorf(
+				"unknown parameter type %#v spec.(*ast.TypeSpec).Type=%#v",
+				t, spec.(*ast.TypeSpec).Type,
+			))
 		}
 	}
 	fields := ""
@@ -287,11 +284,10 @@ func typeSection(imports map[string]string) func(doc.Type) string {
 					lines = append(lines, "")
 				}
 			default:
-				slog.Error(
-					fmt.Sprintf("unknown parameter type %#v", t),
-					"spec.(*ast.TypeSpec).Type", fmt.Sprintf("%#v", spec.(*ast.TypeSpec).Type),
-				)
-				os.Exit(1)
+				panic(fmt.Errorf(
+					"unknown parameter type %#v spec.(*ast.TypeSpec).Type=%#v",
+					t, spec.(*ast.TypeSpec).Type,
+				))
 			}
 		}
 		fields := ""
