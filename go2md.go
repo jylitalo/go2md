@@ -35,11 +35,8 @@ func setupLogging(debug bool, color bool) {
 			return a
 		},
 	}))
-
-	if debug {
-		slog.Debug("go2md started")
-	}
 	slog.SetDefault(log)
+	slog.Debug("go2md started")
 }
 
 func main() {
