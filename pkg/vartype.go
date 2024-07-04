@@ -89,6 +89,8 @@ func variableType(variable ast.Expr, depth int, hyphen bool, imports map[string]
 			varTypes = append(varTypes, variableType(arg, depth, hyphen, imports))
 		}
 		return sprintf(funcName+"(%s)", join(varTypes, ", "))
+	case *ast.ChanType:
+		return sprintf("chan")
 	case *ast.CompositeLit:
 		eltsType := variableType(t.Type, depth, hyphen, imports)
 		varTypes := []varTypeOutput{}
