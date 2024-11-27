@@ -5,7 +5,7 @@ go 1.21.1
 require (
 	github.com/jylitalo/tint v1.0.3
 	github.com/mattn/go-isatty v0.0.19
-	github.com/spf13/cobra v1.7.0
+	github.com/spf13/cobra v1.8.0
 )
 
 require (
